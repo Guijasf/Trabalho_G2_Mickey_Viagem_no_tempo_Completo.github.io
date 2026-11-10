@@ -1,3 +1,4 @@
+import { CONTENT } from './content.js';
 const SECTIONS = [
   { code: '151', title: 'O elo perdido', pages: [
     { page: 5, from: 1, to: 6, topic: 'O elo perdido' },
@@ -42,7 +43,7 @@ export const PROGRAMS = SECTIONS.map(({ code, title, pages }) => ({
   questions: pages.flatMap(({ page, from, to, topic }) =>
     Array.from({ length: to - from + 1 }, (_, index) => ({
       id: from + index,
-      answer: null,
+      ...CONTENT[from + index],
       page,
       printedPage: page - 2,
       topic,

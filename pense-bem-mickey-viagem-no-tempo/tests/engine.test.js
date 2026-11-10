@@ -5,7 +5,8 @@ let checks=0;
 const check=(fn)=>{fn();checks++;};
 for(const p of PROGRAMS){
  check(()=>assert.equal(p.questions.length,30));
- let browse=initialGame(p);
+ const reading = {...p, questions:p.questions.map(q=>({...q,answer:null}))};
+ let browse=initialGame(reading);
  check(()=>assert.equal(gameReducer(browse,{type:'ANSWER',choice:'A'}),browse));
  check(()=>assert.equal(gameReducer(browse,{type:'PREVIOUS'}),browse));
  for(let i=0;i<30;i++){
@@ -38,7 +39,7 @@ for(const p of PROGRAMS){
 }
 check(()=>assert.equal(new Set(PROGRAMS.flatMap(p=>p.questions.map(q=>q.id))).size,150));
 check(()=>assert.deepEqual(PROGRAMS.map(p=>p.code),['151','152','153','154','155']));
-check(()=>assert.ok(PROGRAMS.every(p=>p.questions.every(q=>q.answer===null))));
+check(()=>assert.ok(PROGRAMS.every(p=>p.questions.every(q=>q.answer===null || ['A','B','C','D'].includes(q.answer)))));
 let s=initialGame({...PROGRAMS[0],questions:PROGRAMS[0].questions.map(q=>({...q,answer:'B'}))});
 check(()=>assert.equal(gameReducer(s,{type:'ANSWER',choice:'X'}),s));
 console.log(`${checks} verificações aprovadas: 5 programas, navegação sem gabarito, 90/60/30/0 pontos, repetição, avanço, reinício e encerramento.`);

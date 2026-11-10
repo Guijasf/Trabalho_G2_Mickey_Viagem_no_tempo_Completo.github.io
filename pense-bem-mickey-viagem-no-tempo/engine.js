@@ -5,7 +5,8 @@ export function initialGame(program) {
 export function gameReducer(state, action) {
   if (action.type === 'START') return initialGame(action.program);
   if (!state || state.finished) return state;
-  if (action.type === 'PREVIOUS' && state.program.questions[state.index].answer == null && state.index > 0) {
+  // Never reopen a scored question from a pending one: that could award points twice.
+  if (action.type === 'PREVIOUS' && state.index > 0 && state.program.questions[state.index].answer == null && state.program.questions[state.index - 1].answer == null) {
     return { ...state, index: state.index - 1, attempts: [], resolved: false, message: '' };
   }
   if (action.type === 'NEXT' && state.program.questions[state.index].answer == null) {

@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node tests/engine.test.js"
+    "test": "node tests/engine.test.js && node tests/content.test.js && node tests/secret-codes.test.js",
+    "start": "expo start",
+    "web": "expo start --web",
+    "snack": "node ../scripts/build-snack.mjs",
+    "export:web": "expo export --platform web"
   },
   "type": "module",
   "dependencies": {
@@ -12,5 +16,6 @@
     "react-dom": "^19.3.1",
     "react-native": "^0.88.0",
     "react-native-web": "^0.21.4"
-  }
+  },
+  "main": "index.js"
 }
