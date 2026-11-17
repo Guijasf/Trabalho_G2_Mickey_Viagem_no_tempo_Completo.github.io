@@ -1,8 +1,9 @@
 import React,{useReducer,useState,useRef,useEffect,useCallback} from 'react';
-import {View,Text,TextInput,StyleSheet,ScrollView,Pressable,Image,Modal,StatusBar,Platform,Animated,Easing,AccessibilityInfo,useWindowDimensions} from 'react-native';
+import {View,Text,TextInput,StyleSheet,ScrollView,Pressable,Image,Modal,StatusBar,SafeAreaView,Platform,Animated,Easing,AccessibilityInfo,useWindowDimensions} from 'react-native';
 import {PROGRAMS} from './data';
 import {initialGame,gameReducer,LETTERS,scoreSummary,displayProgramQuestion,displayAttempt} from './engine';
 import {PAGES} from './pages';
+import {VISUAL_AIDS} from './visual-aids';
 import {DEFAULT_THEME,THEMES} from './themes';
 import {SECRET_CODES,emptySecret,readSecret} from './secret-codes';
 import {normalizeProgramCode,resolveProgramCode} from './program-access';
@@ -17,19 +18,33 @@ const BUTTONS=[
 const ALL=PROGRAMS.flatMap(p=>p.questions);
 const PROVISIONAL_COUNT=ALL.filter(q=>q.answerStatus==='provisional').length;
 
-function EraArtwork({source,tint,height=220,style,clean=false,accessibilityLabel='Ilustração da época'}) {
+function EraArtwork({source,tint,height=220,style,accessibilityLabel='Ilustração da época'}) {
   const [unavailable,setUnavailable]=useState(false);
   useEffect(()=>{setUnavailable(false);},[source?.uri]);
+  // A arte inteira fica visível. Nunca sobrepomos desfoque nem usamos recorte agressivo.
   return <View style={[styles.artFrame,{height,backgroundColor:tint},style]}>
-    {!unavailable ? clean ? (
-      <Image accessibilityLabel={accessibilityLabel} source={source} resizeMode="contain" style={styles.artFull} onError={()=>setUnavailable(true)}/>
-    ) : <>
-      <Image source={source} blurRadius={18} resizeMode="cover" style={styles.artBlur} onError={()=>setUnavailable(true)}/>
-      <View style={styles.artShade}/>
-      <Image accessibilityLabel={accessibilityLabel} source={source} resizeMode="contain" style={styles.artFull}/>
-    </> : <Text style={styles.artFallback}>✦ VIAGEM NO TEMPO ✦</Text>}
+    {unavailable ? <Text style={styles.artFallback}>✦ VIAGEM NO TEMPO ✦</Text> :
+      <Image accessibilityLabel={accessibilityLabel} source={source} resizeMode="contain" style={styles.artFull} onError={()=>setUnavailable(true)}/>}
   </View>;
 }
+function VisualQuestionIllustration({question}){
+  const aid=VISUAL_AIDS[question.id];
+  if(!aid)return null;
+  return <View style={styles.questionIllustration} testID={`illustration-${question.id}`}>
+    <Text style={styles.illustrationLabel}>FIGURA {aid.letter} · RECRIAÇÃO DIDÁTICA</Text>
+    <Image source={aid.source} resizeMode="contain" accessibilityLabel={`Imagem complementar da questão ${question.id}: ${aid.description}`} style={styles.questionIllustrationImage}/>
+    <Text style={styles.illustrationDisclaimer}>Ilustração complementar, não é a figura original do livro. Resposta em revisão.</Text>
+  </View>;
+}
+function BookVisualReference({question,onOpenPage}){
+  if(!question.visual || VISUAL_AIDS[question.id])return null;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Ampliar ilustração da questão ${question.id} do livro`} onPress={onOpenPage} style={styles.bookVisualReference}>
+    <Text style={styles.illustrationLabel}>ILUSTRAÇÃO DO LIVRO · QUESTÃO {question.id}</Text>
+    <Image source={PAGES[question.page]} resizeMode="contain" style={styles.bookVisualReferenceImage} />
+    <Text style={styles.penseBookLink}>Toque para ampliar e localizar a figura ↗</Text>
+  </Pressable>;
+}
+
 function ModeChoice({title,description,icon,active,theme,onPress,testID}) {
   return <Pressable testID={testID} accessibilityRole="button" accessibilityState={{selected:active}}
     onPress={onPress} style={({pressed})=>[styles.modeChoice,{borderColor:active?theme.accent:theme.border,backgroundColor:active?theme.soft:theme.surface,opacity:pressed?.82:1,transform:[{scale:pressed?.985:1}]}]}>
@@ -117,21 +132,29 @@ function PenseBemConsole({game,question,mode,theme,onAnswer,onNext,onRestart,onO
     <View style={styles.penseReading}>
       <Text style={styles.penseSectionLabel}>{mode==='book'?'◉  LIVRO ORIGINAL':'✦  QUIZ MODERNO'}</Text>
       {mode==='book' ? <>
-        <Text style={styles.pensePrompt}>Encontre a questão {question.id} na página {question.printedPage} e responda com as teclas coloridas.</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Ampliar página ${question.printedPage} do livro`} onPress={onOpenPage} style={styles.penseBookButton}>
+        <Text style={styles.pensePrompt}>{VISUAL_AIDS[question.id]
+          ? `Observe a imagem complementar da figura ${VISUAL_AIDS[question.id].letter} e responda com as teclas coloridas.`
+          : `Encontre a questão ${question.id} na página ${question.printedPage} e responda com as teclas coloridas.`}</Text>
+        <VisualQuestionIllustration question={question}/>
+        {VISUAL_AIDS[question.id] ? <Pressable accessibilityRole="button" onPress={onOpenPage} style={styles.penseSourceLink}>
+          <Text style={styles.penseBookLink}>Ver também a página {question.printedPage} original ↗</Text>
+        </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={`Ampliar página ${question.printedPage} do livro`} onPress={onOpenPage} style={styles.penseBookButton}>
           <Image source={PAGES[question.page]} accessibilityLabel={`Página ${question.printedPage} do livro`} resizeMode="contain" style={styles.penseBookImage}/>
           <Text style={styles.penseBookLink}>Toque para ampliar a página ↗</Text>
-        </Pressable>
+        </Pressable>}
       </> : <>
         <Text style={styles.pensePrompt}>{question.prompt}</Text>
         {question.context ? <Text style={styles.penseContext}>{question.context}</Text> : null}
+        <VisualQuestionIllustration question={question}/>
+        <BookVisualReference question={question} onOpenPage={onOpenPage}/>
         {question.options.map((option,i)=><Text key={`${question.id}-${i}`} style={styles.penseOption}>{LETTERS[i]}. {option}</Text>)}
         <Pressable accessibilityRole="button" onPress={onOpenPage} style={styles.penseSourceLink}>
           <Text style={styles.penseBookLink}>Consultar página original {question.printedPage} ↗</Text>
         </Pressable>
       </>}
       {question.answerStatus==='provisional'?<Text style={styles.penseWarning}>Gabarito provisório: resposta ainda não verificada no original.</Text>:null}
-      {question.imageMissing?<Text style={styles.penseWarning}>A figura desta questão está incompleta na digitalização do livro.</Text>:null}
+      {question.imageMissing?<Text style={styles.penseWarning}>A imagem original desta figura está ausente da digitalização. A ilustração complementar não confirma o gabarito.</Text>:null}
+      {question.reviewNote?<Text style={styles.penseWarning}>{question.reviewNote}</Text>:null}
     </View>
     <Text style={styles.penseKeyPrompt}>ESCOLHA UMA TECLA</Text>
     <View style={styles.penseKeypad}>{BUTTONS.map((opt,i)=>{
@@ -252,7 +275,7 @@ export default function App(){
   },[]);
   useEffect(()=>{if(game?.finished){setScreen('result');scrollTop();}},[game?.finished]);
 
-  return <View style={[styles.root,{backgroundColor:theme.background}]}>
+  return <SafeAreaView style={[styles.root,{backgroundColor:theme.background}]}>
     <StatusBar barStyle="light-content" backgroundColor={theme.statusBar||theme.background}/>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.container,{maxWidth:930,paddingHorizontal:width>720?35:16}]}>
       <Animated.View style={{opacity:enterOpacity}}>
@@ -330,7 +353,7 @@ export default function App(){
             accessibilityLabel={codeGateEnabled?`Destino ${p.title} bloqueado. Digite código para entrar.`:`Iniciar programa ${p.code}`}
             onPress={()=>codeGateEnabled?requestCode():begin(p)}
             style={({pressed})=>[styles.card,{backgroundColor:era.surface,borderColor:era.border,width:wide?'48.7%':'100%',flexDirection:'column',opacity:pressed?.82:1,transform:[{scale:pressed?.987:1}]}]}>
-            <EraArtwork clean source={era.image} tint={era.hero} height={wide?176:190} style={styles.cardArtWide} accessibilityLabel={`Ilustração de ${era.name}`}/>
+            <EraArtwork source={era.image} tint={era.hero} height={wide?176:190} style={styles.cardArtWide} accessibilityLabel={`Ilustração de ${era.name}`}/>
             <View style={[styles.cardCopy,{flex:1}]}>
               <Text style={[styles.eyebrow,{color:era.accent}]}>{`DESTINO 0${i+1}`} · {codeGateEnabled?'CÓDIGO OCULTO':`CÓDIGO ${p.code}`}</Text>
               <Text style={[styles.cardTitle,{color:era.ink}]}>{p.title}</Text>
@@ -347,7 +370,7 @@ export default function App(){
           <Text style={[styles.eyebrow,{color:theme.accent}]}>PROGRAMA {game.program.code}</Text>
         </View>
         <View style={[styles.miniBanner,{backgroundColor:theme.surface,borderColor:theme.border}]}>
-          <EraArtwork source={THEMES[game.program.code].image} tint={theme.hero} height={112} style={styles.bannerArt} accessibilityLabel={THEMES[game.program.code].name}/>
+          <EraArtwork source={THEMES[game.program.code].image} tint={theme.hero} height={width>=720?194:174} style={styles.bannerArt} accessibilityLabel={THEMES[game.program.code].name}/>
           <View style={{flex:1,padding:16}}>
             <Text style={[styles.eyebrow,{color:theme.accent}]}>EXPLORANDO · {game.program.code}</Text>
             <Text style={[styles.sectionTitle,ink]}>{game.program.title}</Text>
@@ -405,12 +428,12 @@ export default function App(){
       </View>
     </Modal>
     {trip&&<Portal destination={trip} onDone={completeTrip}/>}
-  </View>;
+  </SafeAreaView>;
 }
 
 const styles=StyleSheet.create({
   root:{flex:1},
-  container:{width:'100%',alignSelf:'center',paddingTop:Platform.OS==='ios'?20:16,paddingBottom:88},
+  container:{width:'100%',alignSelf:'center',paddingTop:10,paddingBottom:88},
   header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,paddingVertical:10,marginBottom:6},
   brand:{fontSize:21,fontWeight:'900',letterSpacing:-.6},
   tiny:{fontSize:9,fontWeight:'800',letterSpacing:1.3,marginTop:4},
@@ -419,8 +442,6 @@ const styles=StyleSheet.create({
   action:{borderWidth:1.5,borderRadius:15,minHeight:48,paddingVertical:11,paddingHorizontal:15,alignItems:'center',justifyContent:'center',marginVertical:4},
   actionText:{fontSize:13,fontWeight:'800',textAlign:'center'},
   artFrame:{overflow:'hidden',position:'relative',alignItems:'center',justifyContent:'center'},
-  artBlur:{...StyleSheet.absoluteFillObject,width:'100%',height:'100%',opacity:.76},
-  artShade:{...StyleSheet.absoluteFillObject,backgroundColor:'#081A24A6'},
   artFull:{width:'100%',height:'100%'},
   artFallback:{color:'#FFFFFF',fontSize:13,fontWeight:'800',letterSpacing:1},
   hero:{borderRadius:26,overflow:'hidden',marginTop:18,borderWidth:1.5},
@@ -472,8 +493,8 @@ const styles=StyleSheet.create({
   cardTitle:{fontSize:17,lineHeight:22,fontWeight:'900',letterSpacing:-.3,marginBottom:7},
   cardArrow:{width:30,height:27,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:9,alignSelf:'flex-start',marginTop:9},
   footer:{fontSize:10,lineHeight:17,marginTop:20,marginBottom:14},
-  miniBanner:{flexDirection:'row',alignItems:'center',borderWidth:1,borderRadius:20,overflow:'hidden',marginVertical:7},
-  bannerArt:{width:128,flexShrink:0},
+  miniBanner:{flexDirection:'column',borderWidth:1,borderRadius:20,overflow:'hidden',marginVertical:7},
+  bannerArt:{width:'100%',borderBottomWidth:1,borderBottomColor:'#FFFFFF22'},
   progress:{height:5,borderRadius:5,overflow:'hidden',marginBottom:8},
   questionCard:{borderWidth:1,borderRadius:24,padding:19,marginVertical:13},
   bigScore:{fontSize:58,fontWeight:'900',marginVertical:18},
@@ -504,6 +525,12 @@ const styles=StyleSheet.create({
   penseBookButton:{alignItems:'center',padding:2},
   penseBookImage:{width:'100%',height:370},
   penseBookLink:{fontSize:12,fontWeight:'900',color:'#6B5118',textAlign:'center',paddingVertical:8},
+  questionIllustration:{borderWidth:1,borderRadius:15,borderColor:'#D5C69F',backgroundColor:'#FFF8E8',marginVertical:12,overflow:'hidden',padding:10,alignItems:'center'},
+  questionIllustrationImage:{width:'100%',height:250,backgroundColor:'#FCFAF4',borderRadius:10},
+  illustrationLabel:{fontSize:10,letterSpacing:1.1,fontWeight:'900',color:'#826433',marginBottom:9,textAlign:'center'},
+  illustrationDisclaimer:{fontSize:10,lineHeight:16,color:'#665641',textAlign:'center',marginTop:9},
+  bookVisualReference:{borderColor:'#D5C69F',borderWidth:1,borderRadius:13,overflow:'hidden',marginVertical:9,padding:8,alignItems:'center'},
+  bookVisualReferenceImage:{width:'100%',height:230},
   penseSourceLink:{marginTop:7,alignSelf:'flex-start'},
   penseWarning:{fontSize:11,lineHeight:17,backgroundColor:'#FFF0D9',color:'#70521A',padding:10,marginTop:11,borderRadius:9},
   penseKeyPrompt:{fontSize:10,fontWeight:'900',letterSpacing:1.2,textAlign:'center',color:'#3B3D27',marginBottom:9},

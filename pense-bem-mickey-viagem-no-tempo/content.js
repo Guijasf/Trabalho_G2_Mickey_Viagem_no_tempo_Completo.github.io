@@ -167,6 +167,12 @@ export const GABARITO_PROVISORIO = Object.freeze({
 });
 export const QUESTOES_PROVISORIAS = Object.freeze(Object.keys(GABARITO_PROVISORIO).map(Number));
 
+// Observações históricas que não alteram a hipótese escolhida para o gabarito do jogo.
+// Não há evidência suficiente para declarar as questões 99 e 120 oficiais.
+export const REVISAO_NOTAS = Object.freeze({
+  99:'Ambiguidade: estafetas e mensageiros descrevem corredores chasquis; a letra B está apenas proposta até conferência do gabarito original.',
+  120:'Ambiguidade iconográfica: a coroa de folhas também aparece em arte grega; a letra B (Romano) é hipótese, não confirmação.',
+});
 export const CONTENT = Object.fromEntries(rows.map(([id, prompt, options, key, visual = false]) => [id, {
   id,
   prompt,
@@ -177,4 +183,5 @@ export const CONTENT = Object.fromEntries(rows.map(([id, prompt, options, key, v
   context: id >= 134 && id <= 139 ? wordTables[Math.floor((id - 134) / 2)].map((word, index) => `${index + 1}: ${word}`).join(' · ') : null,
   answerStatus: key === '?' ? 'provisional' : 'interpreted',
   imageMissing: id >= 121 && id <= 126 && id !== 124,
+  reviewNote: REVISAO_NOTAS[id] || null,
 }]));

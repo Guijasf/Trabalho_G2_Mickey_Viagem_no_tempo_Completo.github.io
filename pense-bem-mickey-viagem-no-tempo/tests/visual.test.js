@@ -7,7 +7,7 @@ import {PROGRAMS} from '../data.js';
 test('o legado vem primeiro: acesso por código ligado e modo livro',()=>{
   assert.equal(DEFAULT_CODE_GATE_ENABLED,true);
   assert.equal(DEFAULT_GAME_MODE,'book');
-  assert.equal(UI_VERSION,'2.3.0');
+  assert.equal(UI_VERSION,'2.4.0');
 });
 
 test('cinco temas realmente alteram o fundo, superfícies e contraste',()=>{
