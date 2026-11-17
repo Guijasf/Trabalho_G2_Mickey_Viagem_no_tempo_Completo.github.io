@@ -6,6 +6,7 @@ import {PAGES} from './pages';
 import {DEFAULT_THEME,THEMES} from './themes';
 import {SECRET_CODES,emptySecret,readSecret} from './secret-codes';
 import {normalizeProgramCode,resolveProgramCode} from './program-access';
+import {DEFAULT_CODE_GATE_ENABLED,DEFAULT_GAME_MODE,getDestinationDescription} from './visual-config';
 
 const BUTTONS=[
   {key:'A',name:'Vermelho',color:'#ED272A'},
@@ -16,9 +17,29 @@ const BUTTONS=[
 const ALL=PROGRAMS.flatMap(p=>p.questions);
 const PROVISIONAL_COUNT=ALL.filter(q=>q.answerStatus==='provisional').length;
 
+function EraArtwork({source,tint,height=220,style,accessibilityLabel='Ilustração da época'}) {
+  const [unavailable,setUnavailable]=useState(false);
+  useEffect(()=>{setUnavailable(false);},[source?.uri]);
+  return <View style={[styles.artFrame,{height,backgroundColor:tint},style]}>
+    {!unavailable ? <>
+      <Image source={source} blurRadius={18} resizeMode="cover" style={styles.artBlur} onError={()=>setUnavailable(true)}/>
+      <View style={styles.artShade}/>
+      <Image accessibilityLabel={accessibilityLabel} source={source} resizeMode="contain" style={styles.artFull}/>
+    </>:<Text style={styles.artFallback}>✦ VIAGEM NO TEMPO ✦</Text>}
+  </View>;
+}
+function ModeChoice({title,description,icon,active,theme,onPress,testID}) {
+  return <Pressable testID={testID} accessibilityRole="button" accessibilityState={{selected:active}}
+    onPress={onPress} style={({pressed})=>[styles.modeChoice,{borderColor:active?theme.accent:theme.border,backgroundColor:active?theme.soft:theme.surface,opacity:pressed?.82:1,transform:[{scale:pressed?.985:1}]}]}>
+    <View style={[styles.modeIcon,{backgroundColor:active?theme.accent:theme.tag}]}><Text style={[styles.modeIconText,{color:active?'#0E1C22':theme.ink}]}>{icon}</Text></View>
+    <Text style={[styles.modeTitle,{color:theme.ink}]}>{title}</Text>
+    <Text style={[styles.modeDescription,{color:theme.muted}]}>{description}</Text>
+    <View style={[styles.modeRadio,{borderColor:active?theme.accent:theme.muted,backgroundColor:active?theme.accent:'transparent'}]}/>
+  </Pressable>;
+}
 function Action({title,onPress,theme,secondary=false,disabled=false,testID}) {
   return <Pressable testID={testID} accessibilityRole="button" accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
-    style={({pressed})=>[styles.action,{backgroundColor:secondary?'transparent':theme.accent,borderColor:theme.accent,opacity:disabled?.45:pressed?.72:1}]}>
+    style={({pressed})=>[styles.action,{backgroundColor:secondary?'transparent':theme.accent,borderColor:theme.accent,opacity:disabled?.45:pressed?.8:1,transform:[{scale:pressed?.975:1}]}]}>
     <Text style={[styles.actionText,{color:secondary?theme.accent:'#FFFFFF'}]}>{title}</Text>
   </Pressable>;
 }
@@ -44,7 +65,7 @@ function Portal({destination,onDone}){
     const start=(reduce)=>{
       if(cancelled||completed.current)return;
       if(reduce){finish();return;}
-      animation=Animated.timing(motion,{toValue:1,duration:1800,easing:Easing.inOut(Easing.cubic),useNativeDriver:Platform.OS!=='web'});
+      animation=Animated.timing(motion,{toValue:1,duration:1350,easing:Easing.inOut(Easing.cubic),useNativeDriver:Platform.OS!=='web'});
       animation.start(({finished})=>{if(finished&&!cancelled)finish();});
     };
     const sub=AccessibilityInfo.addEventListener('reduceMotionChanged',(enabled)=>{if(enabled)finish();});
@@ -71,14 +92,15 @@ function Portal({destination,onDone}){
 // Reprodução funcional do teclado Pense Bem da referência da AV2:
 // display com código do programa + número da pergunta, tentativas e teclas A/B/C/D.
 // A leitura do livro/quiz fica acima das teclas para funcionar também no celular.
-function PenseBemConsole({game,question,mode,onAnswer,onNext,onRestart,onOpenPage}){
+function PenseBemConsole({game,question,mode,theme,onAnswer,onNext,onRestart,onOpenPage}){
   const attemptNumber=displayAttempt(game);
   const display=displayProgramQuestion(game.program.code,game.index);
-  return <View style={styles.penseConsole} testID="pense-console">
+  return <View style={[styles.penseConsole,{borderColor:theme.border,shadowColor:theme.accent}]} testID="pense-console">
     <View style={styles.penseHeading}>
       <Text style={styles.penseLogo}>TECTOY</Text>
       <Text style={styles.penseModel}>PENSE BEM · VIAGEM NO TEMPO</Text>
     </View>
+    <View style={styles.consoleProgress}><View style={[styles.consoleProgressFill,{width:`${Math.round((game.index+1)/30*100)}%`,backgroundColor:theme.accent}]}/></View>
     <View style={styles.penseDisplay}>
       <Text testID="program-display" accessibilityLabel={`Programa ${game.program.code}, pergunta ${game.index+1} de 30`} style={styles.penseDigits}>{display}</Text>
     </View>
@@ -91,7 +113,7 @@ function PenseBemConsole({game,question,mode,onAnswer,onNext,onRestart,onOpenPag
     </View>
 
     <View style={styles.penseReading}>
-      <Text style={styles.penseSectionLabel}>{mode==='book'?'CONSULTE O LIVRO':'PERGUNTA DO QUIZ'}</Text>
+      <Text style={styles.penseSectionLabel}>{mode==='book'?'◉  LIVRO ORIGINAL':'✦  QUIZ MODERNO'}</Text>
       {mode==='book' ? <>
         <Text style={styles.pensePrompt}>Encontre a questão {question.id} na página {question.printedPage} e responda com as teclas coloridas.</Text>
         <Pressable accessibilityRole="button" accessibilityLabel={`Ampliar página ${question.printedPage} do livro`} onPress={onOpenPage} style={styles.penseBookButton}>
@@ -118,7 +140,7 @@ function PenseBemConsole({game,question,mode,onAnswer,onNext,onRestart,onOpenPag
         accessibilityLabel={`Alternativa ${opt.key}: ${mode==='book'?opt.name:question.options[i]}`}
         accessibilityState={{disabled,selected:isCorrect}} disabled={disabled}
         onPress={()=>onAnswer(opt.key)}
-        style={({pressed})=>[styles.penseKey,{backgroundColor:opt.color,opacity:(used&&!isCorrect) ? 0.48 : pressed ? 0.72 : 1},isCorrect&&styles.penseKeyCorrect]}>
+        style={({pressed})=>[styles.penseKey,{backgroundColor:opt.color,opacity:(used&&!isCorrect) ? 0.48 : pressed ? 0.82 : 1,transform:[{scale:pressed?.955:1}]},isCorrect&&styles.penseKeyCorrect]}>
         <Text style={[styles.penseKeyLetter,{color:opt.key==='B'?'#161616':'#FFFFFF'}]}>{opt.key}</Text>
         <Text style={[styles.penseKeyMarker,{color:opt.key==='B'?'#161616':'#FFFFFF'}]}>{isCorrect?'✓':used?'×':''}</Text>
       </Pressable>;
@@ -138,8 +160,8 @@ function PenseBemConsole({game,question,mode,onAnswer,onNext,onRestart,onOpenPag
 export default function App(){
   const [game,dispatch]=useReducer(gameReducer,null);
   const [screen,setScreen]=useState('home');
-  const [mode,setMode]=useState('book');
-  const [codeGateEnabled,setCodeGateEnabled]=useState(false);
+  const [mode,setMode]=useState(DEFAULT_GAME_MODE);
+  const [codeGateEnabled,setCodeGateEnabled]=useState(DEFAULT_CODE_GATE_ENABLED);
   const [codeInput,setCodeInput]=useState('');
   const [codeError,setCodeError]=useState('');
   const codeInputRef=useRef(null);
@@ -153,7 +175,14 @@ export default function App(){
   const scroll=useRef(null);
   const secret=useRef(emptySecret());
   const {width}=useWindowDimensions();
+  const enterOpacity=useRef(new Animated.Value(1)).current;
   const theme=THEMES[themeCode]||DEFAULT_THEME;
+  useEffect(()=>{
+    enterOpacity.setValue(.25);
+    const transition=Animated.timing(enterOpacity,{toValue:1,duration:320,easing:Easing.out(Easing.quad),useNativeDriver:Platform.OS!=='web'});
+    transition.start();
+    return ()=>transition.stop();
+  },[screen,themeCode,enterOpacity]);
   const question=game?.program.questions[game.index];
   const stats=game?scoreSummary(game):null;
   const bookModeName=(THEMES[themeCode||game?.program?.code]||DEFAULT_THEME).mode;
@@ -222,87 +251,106 @@ export default function App(){
   useEffect(()=>{if(game?.finished){setScreen('result');scrollTop();}},[game?.finished]);
 
   return <View style={[styles.root,{backgroundColor:theme.background}]}>
-    <StatusBar barStyle="dark-content" backgroundColor={theme.background}/>
-    <ScrollView ref={scroll} contentContainerStyle={[styles.container,{maxWidth:970,paddingHorizontal:width>720?35:17}]}>
+    <StatusBar barStyle="light-content" backgroundColor={theme.statusBar||theme.background}/>
+    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.container,{maxWidth:930,paddingHorizontal:width>720?35:16}]}>
+      <Animated.View style={{opacity:enterOpacity}}>
       <View style={[styles.header,{borderBottomColor:theme.border}]}>
         <Pressable onPress={()=>setEra(null)} accessibilityLabel="Retornar à ambientação padrão">
-          <Text style={[styles.brand,ink]}>PENSE BEM<Text style={{color:theme.accent}}> · </Text>DISNEY</Text>
+          <Text style={[styles.brand,ink]}>PENSE<Text style={{color:theme.accent}}> BEM</Text><Text style={{color:theme.muted}}> · </Text>MICKEY</Text>
           <Text style={[styles.tiny,muted]}>VIAGEM NO TEMPO · AV2 MOBILE</Text>
         </Pressable>
-        <Action title="Épocas e ajuda" onPress={()=>setShowHelp(true)} theme={theme} secondary/>
+        <Pressable accessibilityRole="button" onPress={()=>setShowHelp(true)} style={({pressed})=>[styles.helpPill,{borderColor:theme.border,backgroundColor:theme.surface,opacity:pressed?.7:1}]}>
+          <Text style={[styles.helpPillText,ink]}>✧  Épocas</Text>
+        </Pressable>
       </View>
       {announcement?<Text accessibilityLiveRegion="polite" style={[styles.small,muted,{marginTop:10}]}>{announcement}</Text>:null}
 
       {screen==='home' ? <>
-        <View style={[styles.hero,{backgroundColor:theme.soft}]}>
-          <Image source={theme.image} resizeMode="contain" style={styles.heroArt} accessibilityLabel="Arte do Mickey em viagem no tempo"/>
+        <View style={[styles.hero,{backgroundColor:theme.hero,borderColor:theme.border}]}>
+          <EraArtwork source={theme.image} tint={theme.hero} height={width>=720?328:258} accessibilityLabel="Mickey e amigos viajando no tempo"/>
           <View style={styles.heroCopy}>
-            <Text style={[styles.eyebrow,{color:theme.accent}]}>PENSE BEM · UMA AVENTURA INTERATIVA</Text>
-            <Text style={[styles.title,ink]}>Cinco épocas.{ '\n' }150 desafios.</Text>
-            <Text style={[styles.body,muted]}>Use as páginas do livro como no brinquedo original, ou escolha o quiz moderno. Em cada questão, você tem três tentativas.</Text>
+            <View style={[styles.heroChip,{backgroundColor:theme.tag}]}><Text style={[styles.heroChipText,{color:theme.highlight}]}>✦ AVENTURA NO TEMPO</Text></View>
+            <Text style={[styles.title,ink]}>O passado ganha{ '\n' }vida na sua mão.</Text>
+            <Text style={[styles.body,muted]}>5 épocas, 150 desafios e a essência do Pense Bem. Escolha como explorar, embarque no portal e teste seu conhecimento.</Text>
+            <View style={styles.heroMetrics}>
+              <Text style={[styles.heroMetric,{color:theme.highlight}]}>05 <Text style={styles.heroMetricLabel}>PROGRAMAS</Text></Text>
+              <Text style={[styles.heroMetric,{color:theme.highlight}]}>150 <Text style={styles.heroMetricLabel}>PERGUNTAS</Text></Text>
+              <Text style={[styles.heroMetric,{color:theme.highlight}]}>03 <Text style={styles.heroMetricLabel}>TENTATIVAS</Text></Text>
+            </View>
           </View>
         </View>
-        <StatusNote theme={theme} warning>{`Revisão obrigatória: ${PROVISIONAL_COUNT} respostas são hipóteses, não gabarito oficial. Todas as 150 questões são jogáveis; a pontuação continua provisória até a conferência.`}</StatusNote>
         <View style={styles.sectionTop}>
-          <Text style={[styles.sectionTitle,ink]}>Escolha seu modo</Text>
-          <Action title={mode==='book'?'Ir para o modo quiz':'Ir para o modo livro'} secondary theme={theme} onPress={swapMode}/>
+          <View><Text style={[styles.sectionTitle,ink]}>Como quer jogar?</Text><Text style={[styles.small,muted]}>O clássico vem primeiro. O moderno é opcional.</Text></View>
         </View>
-        <Text style={[styles.small,muted]}>{mode==='book'?`Modo ${bookModeName} · páginas originais`:'Modo quiz · enunciados e alternativas na tela'}</Text>
+        <View style={styles.modeRow}>
+          <ModeChoice title="Pense Bem clássico" description="Consulte o livro e use as teclas coloridas" icon="▦" active={mode==='book'} theme={theme} onPress={()=>setMode('book')} testID="mode-classic"/>
+          <ModeChoice title="Quiz moderno" description="Leia perguntas e alternativas na própria tela" icon="✦" active={mode==='quiz'} theme={theme} onPress={()=>setMode('quiz')} testID="mode-quiz"/>
+        </View>
 
-        <View style={styles.gatePanel}>
+        <View style={[styles.gatePanel,{borderColor:theme.accent,backgroundColor:theme.surface}]}>
           <View style={styles.gateHeader}>
             <View style={{flex:1}}>
-              <Text style={styles.gateEyebrow}>PORTÃO DO TEMPO</Text>
+              <Text style={[styles.gateEyebrow,{color:theme.accent}]}>✦ PORTÃO DO TEMPO</Text>
               <Text style={styles.gateTitle}>Acesso por código</Text>
-              <Text style={styles.gateSubtitle}>{codeGateEnabled?'ATIVADO · necessário para iniciar o quiz':'DESATIVADO · escolha livre de destinos'}</Text>
+              <Text style={[styles.gateSubtitle,{color:theme.muted}]}>{codeGateEnabled?'ATIVADO · necessário para iniciar o quiz':'DESATIVADO · escolha livre de destinos'}</Text>
             </View>
             <Pressable testID="toggle-code-gate" accessibilityRole="switch" accessibilityLabel="Exigir código para iniciar programa"
               accessibilityState={{checked:codeGateEnabled}} onPress={changeCodeGate}
               style={[styles.gateToggle,codeGateEnabled&&styles.gateToggleOn]}>
               <View style={[styles.gateToggleDot,codeGateEnabled&&styles.gateToggleDotOn]}/>
-              <Text style={styles.gateToggleLabel}>{codeGateEnabled?'ON':'OFF'}</Text>
+              <Text style={styles.gateToggleLabel}>{codeGateEnabled?'LIGADO':'LIVRE'}</Text>
             </Pressable>
           </View>
           {codeGateEnabled ? <View style={styles.gateEntry}>
-            <Text style={styles.gateHint}>Desafio do códice: encontre no livro o número do programa que deseja explorar.</Text>
-            <Text style={styles.gateInputLabel}>CÓDIGO DO PROGRAMA</Text>
+            <Text style={[styles.gateHint,{color:theme.ink}]}>Descubra o código do programa e libere sua próxima viagem. Uma homenagem ao Pense Bem original.</Text>
+            <Text style={[styles.gateInputLabel,{color:theme.accent}]}>CÓDIGO DO PROGRAMA</Text>
             <View style={styles.gateEntryRow}>
               <TextInput ref={codeInputRef} testID="program-code-input" accessibilityLabel="Digite código de três dígitos"
                 value={codeInput} onChangeText={value=>{setCodeInput(normalizeProgramCode(value));setCodeError('');}}
                 onSubmitEditing={openByCode} placeholder="•••" placeholderTextColor="#9B9B87"
                 keyboardType="number-pad" maxLength={3} returnKeyType="go" autoCorrect={false}
-                style={styles.gateInput}/>
-              <Pressable testID="submit-program-code" accessibilityRole="button" onPress={openByCode} style={styles.gateOpenButton}>
-                <Text style={styles.gateOpenText}>Abrir portal →</Text>
+                style={[styles.gateInput,{borderColor:theme.accent}]}/>
+              <Pressable testID="submit-program-code" accessibilityRole="button" onPress={openByCode} style={[styles.gateOpenButton,{backgroundColor:theme.accent}]}>
+                <Text style={styles.gateOpenText}>Desbloquear →</Text>
               </Pressable>
             </View>
             {codeError ? <Text testID="program-code-error" accessibilityLiveRegion="polite" style={styles.gateError}>{codeError}</Text> : null}
-            <Text style={styles.gateFine}>Os códigos são os identificadores dos cinco programas do Pense Bem, não senhas pessoais. Os cartões abaixo ficam bloqueados neste modo.</Text>
-          </View> : <Text style={styles.gateFine}>Ative para jogar como um desafio de descoberta: somente quem digitar um código válido entra no quiz.</Text>}
+            <Text style={[styles.gateFine,{color:theme.muted}]}>Acesso clássico ativado por padrão. Para explorar livremente, desligue a chave acima.</Text>
+          </View> : <Text style={[styles.gateFine,{color:theme.muted}]}>Modo livre habilitado: os destinos abaixo abrem sem digitar o código. Você pode religar a qualquer momento.</Text>}
         </View>
 
         {game&&!game.finished&&!codeGateEnabled&&<Action title={`Continuar programa ${game.program.code} · pergunta ${game.index+1}`} onPress={()=>{setScreen('play');scrollTop();}} theme={theme}/>}
-        <View style={styles.sectionTop}><Text style={[styles.sectionTitle,ink]}>Escolha seu destino</Text><Text style={[styles.small,muted]}>5 programas · 30 questões cada</Text></View>
-        <View style={styles.cards}>{PROGRAMS.map((p,i)=><Pressable key={p.code} testID={`destination-${p.code}`} accessibilityRole="button"
-          accessibilityLabel={codeGateEnabled?`Destino ${p.title} bloqueado. Digite código para entrar.`:`Iniciar programa ${p.code}`}
-          onPress={()=>codeGateEnabled?requestCode():begin(p)}
-          style={({pressed})=>[styles.card,{borderColor:codeGateEnabled?'#D8C8A4':theme.border,width:width>=730?'48%':'100%',opacity:pressed?.72:1}]}>
-          <Image source={THEMES[p.code].image} resizeMode="contain" style={styles.cardArt}/>
-          <View style={styles.cardCopy}>
-            <Text style={[styles.eyebrow,{color:theme.accent}]}>{codeGateEnabled?`DESTINO 0${i+1} · ACESSO BLOQUEADO`:`DESTINO 0${i+1} · CÓDIGO ${p.code}`}</Text>
-            <Text style={[styles.cardTitle,ink]}>{p.title}</Text>
-            <Text style={[styles.small,muted]}>{codeGateEnabled?'Digite o código no Portão do Tempo acima 🔒':'30 perguntas · até 90 pontos →'}</Text>
-          </View>
-        </Pressable>)}</View>
-        <Text style={[styles.footer,muted]}>Projeto acadêmico baseado em Pense Bem — Disney: Viagem no Tempo (Tectoy / Nova Cultural, 1991). Sem vínculo oficial com os titulares das marcas. Questões adaptadas para estudo.</Text>
+        <View style={styles.sectionTop}><View><Text style={[styles.sectionTitle,ink]}>Destinos no tempo</Text><Text style={[styles.small,muted]}>Cinco mundos para descobrir</Text></View><Text style={[styles.small,{color:theme.accent}]}>{codeGateEnabled?'◈ Bloqueados':'◉ Livres'}</Text></View>
+        <View style={styles.cards}>{PROGRAMS.map((p,i)=>{
+          const era=THEMES[p.code];
+          const wide=width>=730;
+          return <Pressable key={p.code} testID={`destination-${p.code}`} accessibilityRole="button"
+            accessibilityLabel={codeGateEnabled?`Destino ${p.title} bloqueado. Digite código para entrar.`:`Iniciar programa ${p.code}`}
+            onPress={()=>codeGateEnabled?requestCode():begin(p)}
+            style={({pressed})=>[styles.card,{backgroundColor:era.surface,borderColor:era.border,width:wide?'48.7%':'100%',flexDirection:wide?'column':'row',opacity:pressed?.82:1,transform:[{scale:pressed?.987:1}]}]}>
+            <EraArtwork source={era.image} tint={era.hero} height={wide?164:135} style={wide?styles.cardArtWide:styles.cardArtNarrow} accessibilityLabel={`Ilustração de ${era.name}`}/>
+            <View style={[styles.cardCopy,{flex:1}]}>
+              <Text style={[styles.eyebrow,{color:era.accent}]}>{`DESTINO 0${i+1}`} · {codeGateEnabled?'CÓDIGO OCULTO':`CÓDIGO ${p.code}`}</Text>
+              <Text style={[styles.cardTitle,{color:era.ink}]}>{p.title}</Text>
+              <Text style={[styles.small,{color:era.muted}]}>{getDestinationDescription(codeGateEnabled,p.code,p.questions.length)}</Text>
+              <View style={[styles.cardArrow,{borderColor:era.accent}]}><Text style={{color:era.accent,fontWeight:'900',fontSize:17}}>{codeGateEnabled?'⌑':'→'}</Text></View>
+            </View>
+          </Pressable>;
+        })}</View>
+        <StatusNote theme={theme} warning>{`Conteúdo em revisão: ${PROVISIONAL_COUNT} respostas são hipóteses; as demais também precisam ser conferidas no livro original. Pontuações e gabarito não são oficiais.`}</StatusNote>
+        <Text style={[styles.footer,muted]}>Projeto acadêmico baseado em Pense Bem — Disney: Viagem no Tempo (Tectoy / Nova Cultural, 1991). Sem vínculo oficial com as marcas. Conteúdo adaptado para estudo.</Text>
       </> : game ? <>
         <View style={[styles.sectionTop,{marginTop:20}]}>
           <Action title="‹ Destinos" theme={theme} secondary onPress={()=>{setScreen('home');scrollTop();}}/>
           <Text style={[styles.eyebrow,{color:theme.accent}]}>PROGRAMA {game.program.code}</Text>
         </View>
-        <View style={[styles.miniBanner,{backgroundColor:theme.soft}]}>
-          <Image source={THEMES[game.program.code].image} resizeMode="contain" style={styles.bannerArt}/>
-          <View style={{flex:1,padding:12}}><Text style={[styles.sectionTitle,ink]}>{game.program.title}</Text><Text style={[styles.small,muted]}>{(THEMES[game.program.code]).name}</Text></View>
+        <View style={[styles.miniBanner,{backgroundColor:theme.surface,borderColor:theme.border}]}>
+          <EraArtwork source={THEMES[game.program.code].image} tint={theme.hero} height={112} style={styles.bannerArt} accessibilityLabel={THEMES[game.program.code].name}/>
+          <View style={{flex:1,padding:16}}>
+            <Text style={[styles.eyebrow,{color:theme.accent}]}>EXPLORANDO · {game.program.code}</Text>
+            <Text style={[styles.sectionTitle,ink]}>{game.program.title}</Text>
+            <Text style={[styles.small,muted]}>{THEMES[game.program.code].name}</Text>
+          </View>
         </View>
         {screen==='play' ? <>
           <View style={[styles.sectionTop,{marginBottom:4}]}>
@@ -312,11 +360,11 @@ export default function App(){
           <View style={[styles.progress,{backgroundColor:theme.border}]}>
             <View style={{height:'100%',backgroundColor:theme.accent,width:`${(game.index+1)/30*100}%`}}/>
           </View>
-          <PenseBemConsole game={game} question={question} mode={mode}
+          <PenseBemConsole game={game} question={question} mode={mode} theme={theme}
             onAnswer={choice=>dispatch({type:'ANSWER',choice})}
             onNext={next} onRestart={()=>{dispatch({type:'START',program:game.program});scrollTop();}} onOpenPage={openPage}/>
           <Text style={[styles.footer,muted,{textAlign:'center'}]}>As teclas seguem as cores do Pense Bem. Os pontos dependem de um gabarito ainda em revisão.</Text>
-        </> : <View style={[styles.questionCard,{borderColor:theme.border}]}>
+        </> : <View style={[styles.questionCard,{borderColor:theme.border,backgroundColor:theme.surface}]}>
           <Text style={[styles.eyebrow,{color:theme.accent}]}>PROGRAMA CONCLUÍDO</Text>
           <Text style={[styles.title,ink]}>Viagem finalizada!</Text>
           <Text style={[styles.bigScore,ink]}>{stats.score}<Text style={[styles.body,muted]}> / 90 pontos</Text></Text>
@@ -330,6 +378,7 @@ export default function App(){
           </View>)}
         </View>}
       </> : null}
+      </Animated.View>
     </ScrollView>
     <Modal visible={showHelp} animationType="fade" transparent onRequestClose={()=>setShowHelp(false)}>
       <View style={styles.modalBackdrop}><ScrollView contentContainerStyle={styles.modalScroll}>
@@ -337,7 +386,7 @@ export default function App(){
           <Text style={[styles.sectionTitle,ink]}>Manual do viajante</Text>
           <Text style={[styles.body,muted]}>Cada programa tem 30 perguntas. Você tem três tentativas por pergunta: acertar na primeira vale 3 pontos, na segunda vale 2, na terceira vale 1; errar as três vale 0.</Text>
           <Text style={[styles.body,muted]}>Trocar de época e de modo mantém a questão e os pontos. Ao escolher outro destino, começa uma nova partida.</Text>
-          <Text style={[styles.body,muted]}>Na tela inicial, ative Acesso por código para exigir o número de três dígitos do programa. Com ele desligado, é possível escolher diretamente um destino. Os códigos de acesso não são os atalhos secretos de época.</Text>
+          <Text style={[styles.body,muted]}>Acesso por código já começa ligado, como no brinquedo clássico: digite os três dígitos do programa. Você pode desligar a chave para explorar os destinos sem digitar. Os códigos de acesso não são os atalhos secretos de época.</Text>
           <Text style={[styles.sectionTitle,ink,{marginTop:18}]}>Códigos secretos</Text>
           <Text style={[styles.small,muted]}>Na web, pressione Shift e digite um código. No celular, use os botões abaixo:</Text>
           {Object.entries(SECRET_CODES).map(([secretCode,programCode])=><Action key={secretCode} theme={theme} secondary title={`${secretCode} · ${(THEMES[programCode]||DEFAULT_THEME).name}`} onPress={()=>setEra(programCode)}/>)}
@@ -358,84 +407,122 @@ export default function App(){
 }
 
 const styles=StyleSheet.create({
-  root:{flex:1},container:{width:'100%',alignSelf:'center',paddingTop:20,paddingBottom:55},
-  header:{borderBottomWidth:1,flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,paddingBottom:12},
-  brand:{fontSize:21,fontWeight:'900'},tiny:{fontSize:10,letterSpacing:1.1,marginTop:2},
-  action:{borderWidth:1,borderRadius:11,minHeight:43,paddingVertical:10,paddingHorizontal:15,alignItems:'center',justifyContent:'center',marginVertical:5},
+  root:{flex:1},
+  container:{width:'100%',alignSelf:'center',paddingTop:Platform.OS==='ios'?20:16,paddingBottom:88},
+  header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,paddingVertical:10,marginBottom:6},
+  brand:{fontSize:21,fontWeight:'900',letterSpacing:-.6},
+  tiny:{fontSize:9,fontWeight:'800',letterSpacing:1.3,marginTop:4},
+  helpPill:{minHeight:42,paddingHorizontal:16,borderWidth:1,borderRadius:30,justifyContent:'center',alignItems:'center'},
+  helpPillText:{fontSize:12,fontWeight:'800'},
+  action:{borderWidth:1.5,borderRadius:15,minHeight:48,paddingVertical:11,paddingHorizontal:15,alignItems:'center',justifyContent:'center',marginVertical:4},
   actionText:{fontSize:13,fontWeight:'800',textAlign:'center'},
-  hero:{borderRadius:20,overflow:'hidden',marginTop:21},heroArt:{width:'100%',height:270},heroCopy:{padding:24},
-  eyebrow:{fontSize:11,fontWeight:'900',letterSpacing:1.2,marginBottom:9},title:{fontSize:34,lineHeight:42,fontWeight:'900',marginBottom:8},
-  body:{fontSize:15,lineHeight:23},small:{fontSize:12,lineHeight:19},note:{borderWidth:1,padding:13,borderRadius:11,marginVertical:10},noteText:{fontSize:12,lineHeight:19},
-  sectionTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap',marginTop:17,marginBottom:13},
-  sectionTitle:{fontSize:20,lineHeight:26,fontWeight:'800'},cards:{flexDirection:'row',flexWrap:'wrap',gap:15,justifyContent:'space-between'},
-  card:{borderWidth:1,borderRadius:16,overflow:'hidden',backgroundColor:'#FFFFFF'},cardArt:{width:'100%',height:190},cardCopy:{padding:19},cardTitle:{fontSize:20,fontWeight:'800',marginBottom:8},
-  gatePanel:{backgroundColor:'#133A32',borderRadius:17,borderWidth:1,borderColor:'#967D42',padding:18,marginTop:22,marginBottom:10},
-  gateHeader:{flexDirection:'row',gap:12,alignItems:'center',justifyContent:'space-between'},
-  gateEyebrow:{color:'#D9C18C',fontSize:10,fontWeight:'900',letterSpacing:1.7,marginBottom:5},
-  gateTitle:{color:'#FFFFFF',fontSize:21,fontWeight:'900'},
-  gateSubtitle:{color:'#B7DBCC',fontSize:11,marginTop:7},
-  gateToggle:{backgroundColor:'#61736D',borderRadius:30,borderWidth:1,borderColor:'#D3BE85',paddingVertical:8,paddingHorizontal:10,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7,minWidth:93,minHeight:49},
-  gateToggleOn:{backgroundColor:'#1D966C'},
-  gateToggleDot:{backgroundColor:'#C3C9C5',width:17,height:17,borderRadius:9},
-  gateToggleDotOn:{backgroundColor:'#EDE0A7'},
-  gateToggleLabel:{color:'#FFFFFF',fontSize:13,fontWeight:'900'},
-  gateEntry:{borderTopWidth:1,borderTopColor:'#496A5D',marginTop:16,paddingTop:16},
-  gateHint:{color:'#F5EBCB',fontSize:14,lineHeight:20,marginBottom:16},
-  gateInputLabel:{color:'#D9C18C',fontSize:10,fontWeight:'900',letterSpacing:1.4,marginBottom:7},
-  gateEntryRow:{flexDirection:'row',gap:10,alignItems:'center',flexWrap:'wrap'},
-  gateInput:{backgroundColor:'#091D18',color:'#F7E4A8',fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:26,fontWeight:'900',letterSpacing:5,textAlign:'center',borderWidth:1,borderColor:'#A99663',borderRadius:10,width:116,minHeight:57,paddingVertical:10,paddingHorizontal:5},
-  gateOpenButton:{backgroundColor:'#D7A44B',borderRadius:10,minHeight:57,paddingVertical:14,paddingHorizontal:20,alignItems:'center',justifyContent:'center',flexGrow:1},
-  gateOpenText:{color:'#16291F',fontSize:15,fontWeight:'900'},
-  gateError:{color:'#FFD6A9',fontSize:12,fontWeight:'700',lineHeight:18,marginTop:10},
-  gateFine:{color:'#B7DBCC',fontSize:11,lineHeight:17,marginTop:10},
-  footer:{fontSize:10,lineHeight:17,marginTop:24},miniBanner:{flexDirection:'row',alignItems:'center',borderRadius:14,overflow:'hidden',marginTop:2},bannerArt:{width:130,height:115},
-  progress:{height:7,borderRadius:4,overflow:'hidden',marginBottom:9},questionCard:{backgroundColor:'#FFFFFF',borderWidth:1,borderRadius:18,padding:20,marginVertical:10},
-  question:{fontSize:23,lineHeight:31,fontWeight:'800',marginBottom:15},link:{fontSize:13,fontWeight:'800',marginVertical:12},
-  pageFrame:{borderWidth:1,borderRadius:10,overflow:'hidden',marginVertical:8},pageImage:{width:'100%',height:460},pageHint:{fontSize:12,fontWeight:'700',textAlign:'center',padding:9},
-  answerList:{gap:10,marginVertical:13},answer:{minHeight:60,borderWidth:1.5,borderRadius:12,flexDirection:'row',alignItems:'center',gap:12,padding:11},
-  colorBadge:{width:40,height:40,borderRadius:8,alignItems:'center',justifyContent:'center'},badgeText:{fontSize:20,fontWeight:'900'},
-  answerLabel:{fontSize:15,lineHeight:22,flex:1},resultMark:{fontSize:22,fontWeight:'900'},
-  bigScore:{fontSize:64,fontWeight:'900',marginVertical:17},toolbar:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:9,padding:9},
-  historyItem:{borderBottomWidth:1,paddingVertical:11,gap:3},modalBackdrop:{flex:1,backgroundColor:'#061D1BCC'},modalScroll:{flexGrow:1,justifyContent:'center',padding:18},
-  dialog:{width:'100%',maxWidth:580,alignSelf:'center',borderRadius:19,padding:21,gap:9},zoomRoot:{flex:1,paddingTop:Platform.OS==='ios'?44:20},
-  // Console clássico do Pense Bem: cores fixas, independente da época/tema.
-  penseConsole:{width:'100%',maxWidth:430,alignSelf:'center',backgroundColor:'#EFEFBD',borderWidth:2,borderColor:'#8D8C65',borderRadius:5,padding:15,marginTop:13,marginBottom:12,
-    shadowColor:'#000000',shadowOpacity:.15,shadowRadius:12,elevation:3},
+  artFrame:{overflow:'hidden',position:'relative',alignItems:'center',justifyContent:'center'},
+  artBlur:{...StyleSheet.absoluteFillObject,width:'100%',height:'100%',opacity:.76},
+  artShade:{...StyleSheet.absoluteFillObject,backgroundColor:'#081A24A6'},
+  artFull:{width:'100%',height:'100%'},
+  artFallback:{color:'#FFFFFF',fontSize:13,fontWeight:'800',letterSpacing:1},
+  hero:{borderRadius:26,overflow:'hidden',marginTop:18,borderWidth:1.5},
+  heroCopy:{paddingHorizontal:22,paddingTop:21,paddingBottom:24},
+  heroChip:{paddingHorizontal:12,paddingVertical:7,alignSelf:'flex-start',borderRadius:40,marginBottom:13},
+  heroChipText:{fontSize:10,fontWeight:'900',letterSpacing:1.3},
+  title:{fontSize:32,lineHeight:38,fontWeight:'900',letterSpacing:-1.1,marginBottom:12},
+  body:{fontSize:14,lineHeight:22},
+  small:{fontSize:12,lineHeight:19},
+  eyebrow:{fontSize:10,fontWeight:'900',letterSpacing:1.2,marginBottom:7},
+  heroMetrics:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',marginTop:20,paddingTop:16,borderTopWidth:1,borderTopColor:'#FFFFFF2F',gap:9},
+  heroMetric:{fontSize:19,fontWeight:'900',letterSpacing:-.5},
+  heroMetricLabel:{fontSize:8,fontWeight:'800',letterSpacing:.3},
+  sectionTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginTop:25,marginBottom:15},
+  sectionTitle:{fontSize:21,lineHeight:28,fontWeight:'900',letterSpacing:-.5},
+  modeRow:{flexDirection:'row',justifyContent:'space-between',gap:10,marginBottom:8},
+  modeChoice:{width:'48.5%',minHeight:172,borderRadius:18,borderWidth:1.5,padding:13,position:'relative'},
+  modeIcon:{height:38,width:38,borderRadius:12,justifyContent:'center',alignItems:'center',marginBottom:12},
+  modeIconText:{fontSize:23,fontWeight:'900'},
+  modeTitle:{fontSize:14,lineHeight:19,fontWeight:'900',marginBottom:6,marginRight:5},
+  modeDescription:{fontSize:11,lineHeight:16,paddingRight:6},
+  modeRadio:{width:11,height:11,borderWidth:2,borderRadius:8,position:'absolute',top:16,right:14},
+  note:{borderWidth:1,padding:15,borderRadius:15,marginVertical:16},
+  noteText:{fontSize:12,lineHeight:19,fontWeight:'500'},
+  gatePanel:{borderWidth:1.5,borderRadius:24,padding:17,marginTop:22,marginBottom:10,overflow:'hidden'},
+  gateHeader:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10},
+  gateEyebrow:{fontSize:10,fontWeight:'900',letterSpacing:1.7,marginBottom:7},
+  gateTitle:{color:'#FFFFFF',fontSize:21,lineHeight:27,fontWeight:'900'},
+  gateSubtitle:{fontSize:11,lineHeight:17,marginTop:7},
+  gateToggle:{backgroundColor:'#45535B',borderRadius:40,borderWidth:1,borderColor:'#81909A',paddingVertical:8,paddingHorizontal:10,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7,minWidth:98,minHeight:46},
+  gateToggleOn:{backgroundColor:'#177C5B',borderColor:'#6AF2B6'},
+  gateToggleDot:{backgroundColor:'#CED3DB',width:14,height:14,borderRadius:7},
+  gateToggleDotOn:{backgroundColor:'#FCF2AF'},
+  gateToggleLabel:{color:'#FFFFFF',fontSize:11,fontWeight:'900',letterSpacing:.3},
+  gateEntry:{borderTopWidth:1,borderTopColor:'#FFFFFF2F',marginTop:16,paddingTop:16},
+  gateHint:{fontSize:13,lineHeight:21,marginBottom:16},
+  gateInputLabel:{fontSize:10,fontWeight:'900',letterSpacing:1.4,marginBottom:9},
+  gateEntryRow:{flexDirection:'row',alignItems:'center',gap:9},
+  gateInput:{backgroundColor:'#06171F',color:'#FFEFBA',fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:26,fontWeight:'900',letterSpacing:4,textAlign:'center',borderWidth:2,borderRadius:13,width:112,minHeight:58,paddingVertical:11,paddingHorizontal:5},
+  gateOpenButton:{borderRadius:13,minHeight:58,paddingVertical:14,paddingHorizontal:10,alignItems:'center',justifyContent:'center',flex:1},
+  gateOpenText:{color:'#12232B',fontSize:14,fontWeight:'900'},
+  gateError:{color:'#FFCAA8',fontSize:12,fontWeight:'700',lineHeight:19,marginTop:11},
+  gateFine:{fontSize:11,lineHeight:18,marginTop:13},
+  cards:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:12,columnGap:10},
+  card:{borderWidth:1,borderRadius:19,overflow:'hidden',minHeight:135},
+  cardArtWide:{width:'100%'},
+  cardArtNarrow:{width:124,flexShrink:0},
+  cardCopy:{padding:13,justifyContent:'center',minWidth:0},
+  cardTitle:{fontSize:17,lineHeight:22,fontWeight:'900',letterSpacing:-.3,marginBottom:7},
+  cardArrow:{width:30,height:27,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:9,alignSelf:'flex-start',marginTop:9},
+  footer:{fontSize:10,lineHeight:17,marginTop:20,marginBottom:14},
+  miniBanner:{flexDirection:'row',alignItems:'center',borderWidth:1,borderRadius:20,overflow:'hidden',marginVertical:7},
+  bannerArt:{width:128,flexShrink:0},
+  progress:{height:5,borderRadius:5,overflow:'hidden',marginBottom:8},
+  questionCard:{borderWidth:1,borderRadius:24,padding:19,marginVertical:13},
+  bigScore:{fontSize:58,fontWeight:'900',marginVertical:18},
+  toolbar:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,paddingVertical:10},
+  historyItem:{borderBottomWidth:1,paddingVertical:12,gap:4},
+  modalBackdrop:{flex:1,backgroundColor:'#030D14E8'},
+  modalScroll:{flexGrow:1,justifyContent:'center',padding:16},
+  dialog:{width:'100%',maxWidth:550,alignSelf:'center',borderRadius:23,padding:21,gap:9},
+  zoomRoot:{flex:1,paddingTop:Platform.OS==='ios'?48:20},
+  // A experiência retrô mantém a carcaça amarelada e as quatro teclas do brinquedo.
+  penseConsole:{width:'100%',maxWidth:470,alignSelf:'center',backgroundColor:'#F1EDC4',borderWidth:2,borderRadius:25,padding:14,marginTop:13,marginBottom:12,shadowColor:'#000000',shadowOpacity:.3,shadowRadius:16,shadowOffset:{width:0,height:8},elevation:5},
   penseHeading:{alignItems:'center',marginBottom:13},
-  penseLogo:{fontSize:34,fontWeight:'900',letterSpacing:-1.8,color:'#F4B309',textShadowColor:'#D94B10',textShadowRadius:1,textShadowOffset:{width:1,height:2}},
-  penseModel:{fontSize:9,fontWeight:'800',letterSpacing:1.1,color:'#59562C'},
-  penseDisplay:{backgroundColor:'#070707',borderWidth:2,borderColor:'#252525',minHeight:79,alignItems:'center',justifyContent:'center',paddingHorizontal:8,marginBottom:10},
-  penseDigits:{fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:31,fontWeight:'800',letterSpacing:1.2,color:'#FF2424',textAlign:'center'},
-  penseAttemptDisplay:{backgroundColor:'#070707',minHeight:40,alignItems:'center',justifyContent:'center',padding:7,marginBottom:6},
-  penseAttemptText:{fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:17,color:'#FFFFFF',textAlign:'center'},
+  penseLogo:{fontSize:31,fontWeight:'900',letterSpacing:-1.4,color:'#F5AD00',textShadowColor:'#AD3A0D',textShadowRadius:1,textShadowOffset:{width:1,height:2}},
+  penseModel:{fontSize:9,fontWeight:'900',letterSpacing:1.3,color:'#5F5931'},
+  consoleProgress:{height:4,borderRadius:6,overflow:'hidden',backgroundColor:'#B5B08F',marginBottom:10},
+  consoleProgressFill:{height:'100%',borderRadius:6},
+  penseDisplay:{backgroundColor:'#080D10',borderWidth:2,borderColor:'#272D32',borderRadius:12,minHeight:82,alignItems:'center',justifyContent:'center',paddingHorizontal:8,marginBottom:9},
+  penseDigits:{fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:32,fontWeight:'900',letterSpacing:.8,color:'#FF443E',textAlign:'center',textShadowColor:'#FF333966',textShadowRadius:12},
+  penseAttemptDisplay:{backgroundColor:'#0B1013',borderRadius:8,minHeight:39,alignItems:'center',justifyContent:'center',padding:7,marginBottom:9},
+  penseAttemptText:{fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:16,color:'#FFFFFF',textAlign:'center'},
   penseCounters:{flexDirection:'row',justifyContent:'space-between',marginBottom:10},
-  penseCounterText:{fontSize:11,color:'#353526',fontWeight:'800',letterSpacing:.3},
-  penseReading:{backgroundColor:'#FFFBEB',borderWidth:1,borderColor:'#C3C09C',padding:13,marginBottom:11},
-  penseSectionLabel:{fontSize:10,color:'#746C36',fontWeight:'900',letterSpacing:1,marginBottom:9},
-  pensePrompt:{fontSize:16,lineHeight:24,fontWeight:'700',color:'#282822',marginBottom:9},
-  penseContext:{fontSize:12,lineHeight:20,color:'#534F40',marginBottom:9},
-  penseOption:{fontSize:13,lineHeight:19,color:'#2C2A22',marginVertical:4},
+  penseCounterText:{fontSize:10,color:'#3C3826',fontWeight:'900',letterSpacing:.4},
+  penseReading:{backgroundColor:'#FFFCF0',borderWidth:1,borderColor:'#CECAA5',borderRadius:14,padding:14,marginBottom:13},
+  penseSectionLabel:{fontSize:10,color:'#796B30',fontWeight:'900',letterSpacing:1.1,marginBottom:9},
+  pensePrompt:{fontSize:16,lineHeight:24,fontWeight:'800',color:'#262820',marginBottom:9},
+  penseContext:{fontSize:12,lineHeight:19,color:'#534F42',marginBottom:9},
+  penseOption:{fontSize:13,lineHeight:20,color:'#303126',marginVertical:5},
   penseBookButton:{alignItems:'center',padding:2},
-  penseBookImage:{width:'100%',height:205},
-  penseBookLink:{fontSize:12,fontWeight:'800',color:'#5B4516',textAlign:'center',paddingVertical:6},
+  penseBookImage:{width:'100%',height:370},
+  penseBookLink:{fontSize:12,fontWeight:'900',color:'#6B5118',textAlign:'center',paddingVertical:8},
   penseSourceLink:{marginTop:7,alignSelf:'flex-start'},
-  penseWarning:{fontSize:11,lineHeight:17,backgroundColor:'#FFF0D9',color:'#70521A',padding:8,marginTop:10},
-  penseKeyPrompt:{fontSize:11,fontWeight:'900',letterSpacing:1.1,textAlign:'center',color:'#3E402A',marginBottom:7},
-  penseKeypad:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:4,columnGap:2,marginBottom:10},
-  penseKey:{width:'49.4%',height:91,alignItems:'center',justifyContent:'center',borderWidth:2,borderColor:'#272727',position:'relative'},
+  penseWarning:{fontSize:11,lineHeight:17,backgroundColor:'#FFF0D9',color:'#70521A',padding:10,marginTop:11,borderRadius:9},
+  penseKeyPrompt:{fontSize:10,fontWeight:'900',letterSpacing:1.2,textAlign:'center',color:'#3B3D27',marginBottom:9},
+  penseKeypad:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:7,columnGap:5,marginBottom:11},
+  penseKey:{width:'48.8%',height:88,alignItems:'center',justifyContent:'center',borderWidth:2,borderColor:'#212626',borderRadius:13,position:'relative',shadowColor:'#000000',shadowOpacity:.24,shadowRadius:4,shadowOffset:{width:0,height:3},elevation:2},
   penseKeyCorrect:{borderColor:'#FFFFFF',borderWidth:4},
-  penseKeyLetter:{fontSize:35,fontWeight:'700'},
-  penseKeyMarker:{position:'absolute',right:12,top:5,fontSize:19,fontWeight:'900'},
-  penseFeedback:{backgroundColor:'#101010',paddingVertical:11,paddingHorizontal:12,marginBottom:9,minHeight:46,justifyContent:'center'},
-  penseFeedbackText:{color:'#FFFFFF',fontSize:12,lineHeight:18,textAlign:'center'},
-  penseNext:{backgroundColor:'#284E37',borderWidth:1,borderColor:'#102D1C',padding:12,alignItems:'center',marginBottom:8},
-  penseNextText:{color:'#FFFFFF',fontSize:14,fontWeight:'800'},
-  penseRestart:{backgroundColor:'#C9C9C9',borderWidth:1,borderColor:'#777777',padding:10,alignItems:'center'},
-  penseRestartText:{fontSize:13,color:'#181818',fontWeight:'600'},
+  penseKeyLetter:{fontSize:34,fontWeight:'900'},
+  penseKeyMarker:{position:'absolute',right:12,top:6,fontSize:19,fontWeight:'900'},
+  penseFeedback:{backgroundColor:'#0F1A1B',borderRadius:10,paddingVertical:13,paddingHorizontal:13,marginBottom:12,minHeight:51,justifyContent:'center'},
+  penseFeedbackText:{color:'#FFFFFF',fontSize:12,lineHeight:19,textAlign:'center'},
+  penseNext:{backgroundColor:'#1E7257',borderRadius:12,padding:14,alignItems:'center',marginBottom:10,minHeight:48,justifyContent:'center'},
+  penseNextText:{color:'#FFFFFF',fontSize:14,fontWeight:'900'},
+  penseRestart:{backgroundColor:'#C8C8BF',borderWidth:1,borderColor:'#77776F',borderRadius:11,padding:12,alignItems:'center'},
+  penseRestartText:{fontSize:12,color:'#22241F',fontWeight:'800'},
   portalOverlay:{position:'absolute',left:0,right:0,top:0,bottom:0,zIndex:1000,backgroundColor:'#061F20FA',alignItems:'center',justifyContent:'center',padding:25},
   portalEyebrow:{fontSize:13,letterSpacing:3,color:'#83EEC7',fontWeight:'900',textAlign:'center'},
   portalOuter:{position:'absolute',borderWidth:13,borderColor:'#2CE89B',borderStyle:'dashed',shadowColor:'#69FFC8',shadowOpacity:.55,shadowRadius:30},
   portalMiddle:{position:'absolute',borderWidth:18,borderColor:'#A5F5B9',borderStyle:'dotted'},
-  portalInner:{position:'absolute',borderWidth:16,borderColor:'#0B946A',borderStyle:'dashed'},portalCore:{backgroundColor:'#A2FFD7',shadowColor:'#60FFAF',shadowOpacity:1,shadowRadius:35},
-  portalTitle:{fontSize:25,lineHeight:34,color:'#FFFFFF',fontWeight:'900',textAlign:'center'},portalSkip:{marginTop:40,padding:16},portalSkipText:{color:'#A3FFE0',fontWeight:'900',fontSize:16},
+  portalInner:{position:'absolute',borderWidth:16,borderColor:'#0B946A',borderStyle:'dashed'},
+  portalCore:{backgroundColor:'#A2FFD7',shadowColor:'#60FFAF',shadowOpacity:1,shadowRadius:35},
+  portalTitle:{fontSize:25,lineHeight:34,color:'#FFFFFF',fontWeight:'900',textAlign:'center'},
+  portalSkip:{marginTop:40,padding:16},
+  portalSkipText:{color:'#A3FFE0',fontWeight:'900',fontSize:16},
 });
