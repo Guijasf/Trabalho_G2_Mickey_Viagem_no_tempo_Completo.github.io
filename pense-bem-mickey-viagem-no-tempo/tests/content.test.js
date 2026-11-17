@@ -31,3 +31,13 @@ test('18 hipóteses assinaladas separadamente, sem alegação de gabarito oficia
   }
   assert.equal(Object.values(CONTENT).filter(q=>q.answerStatus==='interpreted').length,132);
 });
+
+// Testa apenas consistência de arquivo. Não é prova de acerto histórico/oficial.
+test('hipótese da questão 120 atualizada e figuras 121-126 continuam pendentes',()=>{
+  assert.equal(CONTENT[120].answer,'B');
+  assert.equal(CONTENT[120].answerStatus,'provisional');
+  for(const id of [121,122,123,125,126]){
+    assert.equal(CONTENT[id].imageMissing,true);
+    assert.equal(CONTENT[id].answerStatus,'provisional');
+  }
+});

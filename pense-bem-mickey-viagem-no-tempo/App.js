@@ -17,15 +17,17 @@ const BUTTONS=[
 const ALL=PROGRAMS.flatMap(p=>p.questions);
 const PROVISIONAL_COUNT=ALL.filter(q=>q.answerStatus==='provisional').length;
 
-function EraArtwork({source,tint,height=220,style,accessibilityLabel='Ilustração da época'}) {
+function EraArtwork({source,tint,height=220,style,clean=false,accessibilityLabel='Ilustração da época'}) {
   const [unavailable,setUnavailable]=useState(false);
   useEffect(()=>{setUnavailable(false);},[source?.uri]);
   return <View style={[styles.artFrame,{height,backgroundColor:tint},style]}>
-    {!unavailable ? <>
+    {!unavailable ? clean ? (
+      <Image accessibilityLabel={accessibilityLabel} source={source} resizeMode="contain" style={styles.artFull} onError={()=>setUnavailable(true)}/>
+    ) : <>
       <Image source={source} blurRadius={18} resizeMode="cover" style={styles.artBlur} onError={()=>setUnavailable(true)}/>
       <View style={styles.artShade}/>
       <Image accessibilityLabel={accessibilityLabel} source={source} resizeMode="contain" style={styles.artFull}/>
-    </>:<Text style={styles.artFallback}>✦ VIAGEM NO TEMPO ✦</Text>}
+    </> : <Text style={styles.artFallback}>✦ VIAGEM NO TEMPO ✦</Text>}
   </View>;
 }
 function ModeChoice({title,description,icon,active,theme,onPress,testID}) {
@@ -327,8 +329,8 @@ export default function App(){
           return <Pressable key={p.code} testID={`destination-${p.code}`} accessibilityRole="button"
             accessibilityLabel={codeGateEnabled?`Destino ${p.title} bloqueado. Digite código para entrar.`:`Iniciar programa ${p.code}`}
             onPress={()=>codeGateEnabled?requestCode():begin(p)}
-            style={({pressed})=>[styles.card,{backgroundColor:era.surface,borderColor:era.border,width:wide?'48.7%':'100%',flexDirection:wide?'column':'row',opacity:pressed?.82:1,transform:[{scale:pressed?.987:1}]}]}>
-            <EraArtwork source={era.image} tint={era.hero} height={wide?164:135} style={wide?styles.cardArtWide:styles.cardArtNarrow} accessibilityLabel={`Ilustração de ${era.name}`}/>
+            style={({pressed})=>[styles.card,{backgroundColor:era.surface,borderColor:era.border,width:wide?'48.7%':'100%',flexDirection:'column',opacity:pressed?.82:1,transform:[{scale:pressed?.987:1}]}]}>
+            <EraArtwork clean source={era.image} tint={era.hero} height={wide?176:190} style={styles.cardArtWide} accessibilityLabel={`Ilustração de ${era.name}`}/>
             <View style={[styles.cardCopy,{flex:1}]}>
               <Text style={[styles.eyebrow,{color:era.accent}]}>{`DESTINO 0${i+1}`} · {codeGateEnabled?'CÓDIGO OCULTO':`CÓDIGO ${p.code}`}</Text>
               <Text style={[styles.cardTitle,{color:era.ink}]}>{p.title}</Text>
@@ -463,8 +465,8 @@ const styles=StyleSheet.create({
   gateError:{color:'#FFCAA8',fontSize:12,fontWeight:'700',lineHeight:19,marginTop:11},
   gateFine:{fontSize:11,lineHeight:18,marginTop:13},
   cards:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:12,columnGap:10},
-  card:{borderWidth:1,borderRadius:19,overflow:'hidden',minHeight:135},
-  cardArtWide:{width:'100%'},
+  card:{borderWidth:1,borderRadius:19,overflow:'hidden',minHeight:210},
+  cardArtWide:{width:'100%',borderBottomWidth:1,borderBottomColor:'#FFFFFF20'},
   cardArtNarrow:{width:124,flexShrink:0},
   cardCopy:{padding:13,justifyContent:'center',minWidth:0},
   cardTitle:{fontSize:17,lineHeight:22,fontWeight:'900',letterSpacing:-.3,marginBottom:7},

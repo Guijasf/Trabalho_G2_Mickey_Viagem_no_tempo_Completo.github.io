@@ -162,7 +162,7 @@ const wordTables = [
 // 18 hipóteses de correção, NENHUMA confirmada por gabarito oficial.
 // Para a entrega, conferir no livro: especialmente 121-126 (figuras ausentes no scan).
 export const GABARITO_PROVISORIO = Object.freeze({
-  30:'C',32:'D',36:'A',37:'B',40:'D',49:'A',54:'C',62:'A',64:'B',73:'B',83:'D',99:'B',120:'D',
+  30:'C',32:'D',36:'A',37:'B',40:'D',49:'A',54:'C',62:'A',64:'B',73:'B',83:'D',99:'B',120:'B',
   121:'B',122:'D',123:'A',125:'D',126:'A',
 });
 export const QUESTOES_PROVISORIAS = Object.freeze(Object.keys(GABARITO_PROVISORIO).map(Number));
