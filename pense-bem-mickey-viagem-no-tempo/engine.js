@@ -3,6 +3,18 @@ export const LETTERS = Object.freeze(['A','B','C','D']);
 export const MAX_ATTEMPTS = 3;
 export const POINTS = Object.freeze({1:3, 2:2, 3:1});
 
+// Formato do visor conforme a referência do professor: "151 → 01:".
+export function displayProgramQuestion(programCode,index) {
+  if (!/^\d{3}$/.test(String(programCode))) throw new Error('Código do programa inválido.');
+  if (!Number.isInteger(index) || index < 0 || index >= 30) throw new Error('Índice da pergunta inválido.');
+  return `${programCode} → ${String(index + 1).padStart(2,'0')}:`;
+}
+
+export function displayAttempt(game) {
+  if (!game || !Array.isArray(game.attempts)) throw new Error('Jogo não iniciado.');
+  return game.resolved ? Math.max(1,game.attempts.length) : Math.min(3,game.attempts.length + 1);
+}
+
 export function initialGame(program) {
   if (!program || !Array.isArray(program.questions) || program.questions.length !== 30) {
     throw new Error('Cada programa precisa ter exatamente 30 perguntas.');

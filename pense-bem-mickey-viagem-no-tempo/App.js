@@ -1,7 +1,7 @@
 import React,{useReducer,useState,useRef,useEffect,useCallback} from 'react';
 import {View,Text,StyleSheet,ScrollView,Pressable,Image,Modal,StatusBar,Platform,Animated,Easing,AccessibilityInfo,useWindowDimensions} from 'react-native';
 import {PROGRAMS} from './data';
-import {initialGame,gameReducer,LETTERS,scoreSummary} from './engine';
+import {initialGame,gameReducer,LETTERS,scoreSummary,displayProgramQuestion,displayAttempt} from './engine';
 import {PAGES} from './pages';
 import {DEFAULT_THEME,THEMES} from './themes';
 import {SECRET_CODES,emptySecret,readSecret} from './secret-codes';
@@ -67,6 +67,73 @@ function Portal({destination,onDone}){
   </View>;
 }
 
+// Reprodução funcional do teclado Pense Bem da referência da AV2:
+// display com código do programa + número da pergunta, tentativas e teclas A/B/C/D.
+// A leitura do livro/quiz fica acima das teclas para funcionar também no celular.
+function PenseBemConsole({game,question,mode,onAnswer,onNext,onRestart,onOpenPage}){
+  const attemptNumber=displayAttempt(game);
+  const display=displayProgramQuestion(game.program.code,game.index);
+  return <View style={styles.penseConsole} testID="pense-console">
+    <View style={styles.penseHeading}>
+      <Text style={styles.penseLogo}>TECTOY</Text>
+      <Text style={styles.penseModel}>PENSE BEM · VIAGEM NO TEMPO</Text>
+    </View>
+    <View style={styles.penseDisplay}>
+      <Text testID="program-display" accessibilityLabel={`Programa ${game.program.code}, pergunta ${game.index+1} de 30`} style={styles.penseDigits}>{display}</Text>
+    </View>
+    <View style={styles.penseAttemptDisplay}>
+      <Text testID="attempt-display" accessibilityLiveRegion="polite" style={styles.penseAttemptText}>{`Tentativa ${attemptNumber} de 3`}</Text>
+    </View>
+    <View style={styles.penseCounters}>
+      <Text style={styles.penseCounterText}>QUESTÃO {game.index+1}/30</Text>
+      <Text testID="score" style={styles.penseCounterText}>PONTOS {game.score}/90</Text>
+    </View>
+
+    <View style={styles.penseReading}>
+      <Text style={styles.penseSectionLabel}>{mode==='book'?'CONSULTE O LIVRO':'PERGUNTA DO QUIZ'}</Text>
+      {mode==='book' ? <>
+        <Text style={styles.pensePrompt}>Encontre a questão {question.id} na página {question.printedPage} e responda com as teclas coloridas.</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Ampliar página ${question.printedPage} do livro`} onPress={onOpenPage} style={styles.penseBookButton}>
+          <Image source={PAGES[question.page]} accessibilityLabel={`Página ${question.printedPage} do livro`} resizeMode="contain" style={styles.penseBookImage}/>
+          <Text style={styles.penseBookLink}>Toque para ampliar a página ↗</Text>
+        </Pressable>
+      </> : <>
+        <Text style={styles.pensePrompt}>{question.prompt}</Text>
+        {question.context ? <Text style={styles.penseContext}>{question.context}</Text> : null}
+        {question.options.map((option,i)=><Text key={`${question.id}-${i}`} style={styles.penseOption}>{LETTERS[i]}. {option}</Text>)}
+        <Pressable accessibilityRole="button" onPress={onOpenPage} style={styles.penseSourceLink}>
+          <Text style={styles.penseBookLink}>Consultar página original {question.printedPage} ↗</Text>
+        </Pressable>
+      </>}
+      {question.answerStatus==='provisional'?<Text style={styles.penseWarning}>Gabarito provisório: resposta ainda não verificada no original.</Text>:null}
+      {question.imageMissing?<Text style={styles.penseWarning}>A figura desta questão está incompleta na digitalização do livro.</Text>:null}
+    </View>
+    <Text style={styles.penseKeyPrompt}>ESCOLHA UMA TECLA</Text>
+    <View style={styles.penseKeypad}>{BUTTONS.map((opt,i)=>{
+      const used=game.attempts.includes(opt.key);
+      const isCorrect=game.resolved&&question.answer===opt.key;
+      const disabled=game.resolved||used;
+      return <Pressable key={opt.key} testID={`answer-${opt.key}`} accessibilityRole="button"
+        accessibilityLabel={`Alternativa ${opt.key}: ${mode==='book'?opt.name:question.options[i]}`}
+        accessibilityState={{disabled,selected:isCorrect}} disabled={disabled}
+        onPress={()=>onAnswer(opt.key)}
+        style={({pressed})=>[styles.penseKey,{backgroundColor:opt.color,opacity:(used&&!isCorrect) ? 0.48 : pressed ? 0.72 : 1},isCorrect&&styles.penseKeyCorrect]}>
+        <Text style={[styles.penseKeyLetter,{color:opt.key==='B'?'#161616':'#FFFFFF'}]}>{opt.key}</Text>
+        <Text style={[styles.penseKeyMarker,{color:opt.key==='B'?'#161616':'#FFFFFF'}]}>{isCorrect?'✓':used?'×':''}</Text>
+      </Pressable>;
+    })}</View>
+    <View style={styles.penseFeedback}>
+      <Text style={styles.penseFeedbackText} accessibilityLiveRegion="polite">{game.feedback||'Escolha A, B, C ou D. Cada erro consome uma tentativa.'}</Text>
+    </View>
+    {game.resolved?<Pressable testID="next" accessibilityRole="button" onPress={onNext} style={styles.penseNext}>
+      <Text style={styles.penseNextText}>{game.index===29?'Ver resultado →':'Próxima pergunta →'}</Text>
+    </Pressable>:null}
+    <Pressable testID="restart" accessibilityRole="button" accessibilityLabel={`Reiniciar o programa ${game.program.code}`} onPress={onRestart} style={styles.penseRestart}>
+      <Text style={styles.penseRestartText}>Reiniciar Jogo</Text>
+    </Pressable>
+  </View>;
+}
+
 export default function App(){
   const [game,dispatch]=useReducer(gameReducer,null);
   const [screen,setScreen]=useState('home');
@@ -125,12 +192,6 @@ export default function App(){
   },[]);
   useEffect(()=>{if(game?.finished){setScreen('result');scrollTop();}},[game?.finished]);
 
-  const pageImage=question&&PAGES[question.page]&&<Pressable accessibilityRole="button" accessibilityLabel="Ampliar página original do livro" onPress={openPage}
-    style={[styles.pageFrame,{borderColor:theme.border}]}>
-    <Image source={PAGES[question.page]} style={styles.pageImage} resizeMode="contain" accessibilityLabel={`Página impressa ${question.printedPage}`} />
-    <Text style={[styles.pageHint,{color:theme.accent}]}>Toque para ampliar a página do livro ↗</Text>
-  </Pressable>;
-
   return <View style={[styles.root,{backgroundColor:theme.background}]}>
     <StatusBar barStyle="dark-content" backgroundColor={theme.background}/>
     <ScrollView ref={scroll} contentContainerStyle={[styles.container,{maxWidth:970,paddingHorizontal:width>720?35:17}]}>
@@ -180,38 +241,17 @@ export default function App(){
           <View style={{flex:1,padding:12}}><Text style={[styles.sectionTitle,ink]}>{game.program.title}</Text><Text style={[styles.small,muted]}>{(THEMES[game.program.code]).name}</Text></View>
         </View>
         {screen==='play' ? <>
-          <View style={styles.sectionTop}><Text style={[styles.small,ink]}>QUESTÃO {game.index+1} / 30</Text><Text testID="score" style={[styles.sectionTitle,ink]}>{game.score} / 90</Text></View>
-          <View style={[styles.progress,{backgroundColor:theme.border}]}><View style={{height:'100%',backgroundColor:theme.accent,width:`${(game.index+1)/30*100}%`}}/></View>
-          <View style={[styles.sectionTop,{marginBottom:6}]}><Text style={[styles.eyebrow,{color:theme.accent}]}>{mode==='book'?`MODO ${bookModeName.toUpperCase()}`:'MODO QUIZ'}</Text><Action title={mode==='book'?'Abrir quiz':'Abrir livro'} secondary onPress={swapMode} theme={theme}/></View>
-          <View style={[styles.questionCard,{borderColor:theme.border}]}>
-            <Text style={[styles.eyebrow,{color:theme.accent}]}>{question.topic.toUpperCase()} · Nº {question.id}</Text>
-            {mode==='quiz'?<>
-              <Text style={[styles.question,ink]}>{question.prompt}</Text>
-              {question.context?<StatusNote theme={theme}>{question.context}</StatusNote>:null}
-              {question.visual? pageImage : <Pressable onPress={openPage}><Text style={[styles.link,{color:theme.accent}]}>Ver página original do livro ↗</Text></Pressable>}
-            </>:<>
-              <Text style={[styles.question,ink]}>Procure a questão {question.id} na página do livro.</Text>
-              {pageImage}
-            </>}
-            {question.answerStatus==='provisional'&&<StatusNote warning theme={theme}>Atenção: esta resposta é uma hipótese ainda não conferida com o gabarito oficial. A pontuação é experimental.</StatusNote>}
-            {question.imageMissing&&<StatusNote warning theme={theme}>A figura original desta questão não aparece completa na digitalização. Compare com o livro físico antes de usar o gabarito para avaliação.</StatusNote>}
-            <Text style={[styles.small,muted,{marginTop:16}]}>TENTATIVA {game.resolved?Math.max(1,game.attempts.length):game.attempts.length+1} DE 3</Text>
-            <View style={styles.answerList}>{BUTTONS.map((opt,i)=>{
-              const attempted=game.attempts.includes(opt.key);
-              const correct=game.resolved&&question.answer===opt.key;
-              const wrong=attempted&&!correct;
-              const disabled=game.resolved||attempted;
-              return <Pressable key={opt.key} testID={`answer-${opt.key}`} accessibilityRole="button" accessibilityLabel={`Alternativa ${opt.key}: ${mode==='book'?opt.name:question.options[i]}`} accessibilityState={{disabled}}
-                onPress={()=>dispatch({type:'ANSWER',choice:opt.key})} disabled={disabled}
-                style={({pressed})=>[styles.answer,{borderColor:correct?'#248653':wrong?'#C95142':theme.border,backgroundColor:correct?'#E8F8EE':wrong?'#FFEDEA':'#FFFFFF',opacity:pressed?.74:1}]}>
-                  <View style={[styles.colorBadge,{backgroundColor:opt.color}]}><Text style={[styles.badgeText,{color:opt.key==='B'?'#151515':'#FFFFFF'}]}>{opt.key}</Text></View>
-                  <Text style={[styles.answerLabel,ink]}>{mode==='book'?opt.name:question.options[i]}</Text>
-                  <Text style={[styles.resultMark,{color:correct?'#178641':'#BE473A'}]}>{correct?'✓':wrong?'×':''}</Text>
-                </Pressable>;
-            })}</View>
-            {game.feedback?<StatusNote theme={theme}>{game.feedback}{game.resolved?` Resposta cadastrada: ${question.answer}.`:''}</StatusNote>:<Text style={[styles.small,muted]}>Cada erro consome uma tentativa. Acertos valem 3, 2 ou 1 ponto.</Text>}
-            {game.resolved&&<Action testID="next" title={game.index===29?'Concluir e ver resultado →':'Próxima questão →'} onPress={next} theme={theme}/>}
+          <View style={[styles.sectionTop,{marginBottom:4}]}>
+            <Text style={[styles.eyebrow,{color:theme.accent}]}>{mode==='book'?`MODO ${bookModeName.toUpperCase()}`:'MODO QUIZ'}</Text>
+            <Action title={mode==='book'?'Trocar para Quiz':'Trocar para Livro'} secondary theme={theme} onPress={swapMode}/>
           </View>
+          <View style={[styles.progress,{backgroundColor:theme.border}]}>
+            <View style={{height:'100%',backgroundColor:theme.accent,width:`${(game.index+1)/30*100}%`}}/>
+          </View>
+          <PenseBemConsole game={game} question={question} mode={mode}
+            onAnswer={choice=>dispatch({type:'ANSWER',choice})}
+            onNext={next} onRestart={()=>{dispatch({type:'START',program:game.program});scrollTop();}} onOpenPage={openPage}/>
+          <Text style={[styles.footer,muted,{textAlign:'center'}]}>As teclas seguem as cores do Pense Bem. Os pontos dependem de um gabarito ainda em revisão.</Text>
         </> : <View style={[styles.questionCard,{borderColor:theme.border}]}>
           <Text style={[styles.eyebrow,{color:theme.accent}]}>PROGRAMA CONCLUÍDO</Text>
           <Text style={[styles.title,ink]}>Viagem finalizada!</Text>
@@ -274,6 +314,40 @@ const styles=StyleSheet.create({
   bigScore:{fontSize:64,fontWeight:'900',marginVertical:17},toolbar:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:9,padding:9},
   historyItem:{borderBottomWidth:1,paddingVertical:11,gap:3},modalBackdrop:{flex:1,backgroundColor:'#061D1BCC'},modalScroll:{flexGrow:1,justifyContent:'center',padding:18},
   dialog:{width:'100%',maxWidth:580,alignSelf:'center',borderRadius:19,padding:21,gap:9},zoomRoot:{flex:1,paddingTop:Platform.OS==='ios'?44:20},
+  // Console clássico do Pense Bem: cores fixas, independente da época/tema.
+  penseConsole:{width:'100%',maxWidth:430,alignSelf:'center',backgroundColor:'#EFEFBD',borderWidth:2,borderColor:'#8D8C65',borderRadius:5,padding:15,marginTop:13,marginBottom:12,
+    shadowColor:'#000000',shadowOpacity:.15,shadowRadius:12,elevation:3},
+  penseHeading:{alignItems:'center',marginBottom:13},
+  penseLogo:{fontSize:34,fontWeight:'900',letterSpacing:-1.8,color:'#F4B309',textShadowColor:'#D94B10',textShadowRadius:1,textShadowOffset:{width:1,height:2}},
+  penseModel:{fontSize:9,fontWeight:'800',letterSpacing:1.1,color:'#59562C'},
+  penseDisplay:{backgroundColor:'#070707',borderWidth:2,borderColor:'#252525',minHeight:79,alignItems:'center',justifyContent:'center',paddingHorizontal:8,marginBottom:10},
+  penseDigits:{fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:31,fontWeight:'800',letterSpacing:1.2,color:'#FF2424',textAlign:'center'},
+  penseAttemptDisplay:{backgroundColor:'#070707',minHeight:40,alignItems:'center',justifyContent:'center',padding:7,marginBottom:6},
+  penseAttemptText:{fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:17,color:'#FFFFFF',textAlign:'center'},
+  penseCounters:{flexDirection:'row',justifyContent:'space-between',marginBottom:10},
+  penseCounterText:{fontSize:11,color:'#353526',fontWeight:'800',letterSpacing:.3},
+  penseReading:{backgroundColor:'#FFFBEB',borderWidth:1,borderColor:'#C3C09C',padding:13,marginBottom:11},
+  penseSectionLabel:{fontSize:10,color:'#746C36',fontWeight:'900',letterSpacing:1,marginBottom:9},
+  pensePrompt:{fontSize:16,lineHeight:24,fontWeight:'700',color:'#282822',marginBottom:9},
+  penseContext:{fontSize:12,lineHeight:20,color:'#534F40',marginBottom:9},
+  penseOption:{fontSize:13,lineHeight:19,color:'#2C2A22',marginVertical:4},
+  penseBookButton:{alignItems:'center',padding:2},
+  penseBookImage:{width:'100%',height:205},
+  penseBookLink:{fontSize:12,fontWeight:'800',color:'#5B4516',textAlign:'center',paddingVertical:6},
+  penseSourceLink:{marginTop:7,alignSelf:'flex-start'},
+  penseWarning:{fontSize:11,lineHeight:17,backgroundColor:'#FFF0D9',color:'#70521A',padding:8,marginTop:10},
+  penseKeyPrompt:{fontSize:11,fontWeight:'900',letterSpacing:1.1,textAlign:'center',color:'#3E402A',marginBottom:7},
+  penseKeypad:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:4,columnGap:2,marginBottom:10},
+  penseKey:{width:'49.4%',height:91,alignItems:'center',justifyContent:'center',borderWidth:2,borderColor:'#272727',position:'relative'},
+  penseKeyCorrect:{borderColor:'#FFFFFF',borderWidth:4},
+  penseKeyLetter:{fontSize:35,fontWeight:'700'},
+  penseKeyMarker:{position:'absolute',right:12,top:5,fontSize:19,fontWeight:'900'},
+  penseFeedback:{backgroundColor:'#101010',paddingVertical:11,paddingHorizontal:12,marginBottom:9,minHeight:46,justifyContent:'center'},
+  penseFeedbackText:{color:'#FFFFFF',fontSize:12,lineHeight:18,textAlign:'center'},
+  penseNext:{backgroundColor:'#284E37',borderWidth:1,borderColor:'#102D1C',padding:12,alignItems:'center',marginBottom:8},
+  penseNextText:{color:'#FFFFFF',fontSize:14,fontWeight:'800'},
+  penseRestart:{backgroundColor:'#C9C9C9',borderWidth:1,borderColor:'#777777',padding:10,alignItems:'center'},
+  penseRestartText:{fontSize:13,color:'#181818',fontWeight:'600'},
   portalOverlay:{position:'absolute',left:0,right:0,top:0,bottom:0,zIndex:1000,backgroundColor:'#061F20FA',alignItems:'center',justifyContent:'center',padding:25},
   portalEyebrow:{fontSize:13,letterSpacing:3,color:'#83EEC7',fontWeight:'900',textAlign:'center'},
   portalOuter:{position:'absolute',borderWidth:13,borderColor:'#2CE89B',borderStyle:'dashed',shadowColor:'#69FFC8',shadowOpacity:.55,shadowRadius:30},

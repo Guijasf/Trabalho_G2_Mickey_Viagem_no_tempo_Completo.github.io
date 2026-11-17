@@ -1,8 +1,14 @@
 # Pense Bem — Mickey: Viagem no Tempo | AV2 Mobile
 
-**Versão 2.0 — projeto em React Native / Expo, com 5 programas e 150 questões.**
+**Versão 2.1 — projeto em React Native / Expo, com 5 programas e 150 questões.**
 
 O trabalho foi revisado em função das regras fornecidas pelo professor Jota Pê (AV2 de Desenvolvimento Mobile, 17/11/2026). O documento original está em `entrega/ENUNCIADO_ORIGINAL.pdf`.
+
+## Novo visual — console clássico da referência
+
+A tela de cada programa usa o modelo do **Pense Bem** indicado pelo professor: TECTOY, visor preto com o código do programa e pergunta (`151 → 01:`), visor de tentativa, placar `/90`, teclas grandes **A vermelho / B amarelo / C azul / D verde** e **Reiniciar Jogo**. As perguntas aparecem em uma área de leitura acima das teclas (página digitalizada ou quiz, dependendo do modo). Após acertar ou errar três vezes, o botão leva à próxima pergunta. Os portais e as épocas continuam nas telas de navegação.
+
+O reinício pelo aparelho é imediato, enquanto iniciar uma nova época pelo cartão mantém a animação do portal. A nova interface está documentada em `docs/INTERFACE_PENSE_BEM.md`.
 
 ## O que está implementado
 

@@ -1,0 +1,6 @@
+As imagens originais deste jogo já estão na pasta assets do seu repositório no GitHub.
+Esta distribuição de código não copia as imagens; a interface atual lê as URLs públicas do repositório em pages.js e themes.js.
+
+Ao aplicar sobre seu clone, NÃO EXCLUA os arquivos page-*.jpg, era-*.png, journey.png.
+Em uma cópia sem assets, rode `npm run recuperar:imagens` com internet para baixar backup.
+Para testar sem internet, será necessário mudar as URLs de pages.js/themes.js para requires locais.
