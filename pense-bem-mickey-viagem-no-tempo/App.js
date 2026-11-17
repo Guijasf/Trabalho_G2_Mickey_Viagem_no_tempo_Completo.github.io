@@ -1,10 +1,11 @@
 import React,{useReducer,useState,useRef,useEffect,useCallback} from 'react';
-import {View,Text,StyleSheet,ScrollView,Pressable,Image,Modal,StatusBar,Platform,Animated,Easing,AccessibilityInfo,useWindowDimensions} from 'react-native';
+import {View,Text,TextInput,StyleSheet,ScrollView,Pressable,Image,Modal,StatusBar,Platform,Animated,Easing,AccessibilityInfo,useWindowDimensions} from 'react-native';
 import {PROGRAMS} from './data';
 import {initialGame,gameReducer,LETTERS,scoreSummary,displayProgramQuestion,displayAttempt} from './engine';
 import {PAGES} from './pages';
 import {DEFAULT_THEME,THEMES} from './themes';
 import {SECRET_CODES,emptySecret,readSecret} from './secret-codes';
+import {normalizeProgramCode,resolveProgramCode} from './program-access';
 
 const BUTTONS=[
   {key:'A',name:'Vermelho',color:'#ED272A'},
@@ -138,6 +139,10 @@ export default function App(){
   const [game,dispatch]=useReducer(gameReducer,null);
   const [screen,setScreen]=useState('home');
   const [mode,setMode]=useState('book');
+  const [codeGateEnabled,setCodeGateEnabled]=useState(false);
+  const [codeInput,setCodeInput]=useState('');
+  const [codeError,setCodeError]=useState('');
+  const codeInputRef=useRef(null);
   const [themeCode,setThemeCode]=useState(null);
   const [showHelp,setShowHelp]=useState(false);
   const [showZoom,setShowZoom]=useState(false);
@@ -170,6 +175,30 @@ export default function App(){
   const begin=(program)=>travel(THEMES[program.code].name,()=>{
     dispatch({type:'START',program});setScreen('play');setThemeCode(program.code);scrollTop();
   });
+  const changeCodeGate=()=>{
+    setCodeGateEnabled(v=>!v);
+    setCodeInput('');
+    setCodeError('');
+    setAnnouncement('');
+  };
+  const requestCode=()=>{
+    setCodeError('Digite o código de três números para abrir este destino.');
+    codeInputRef.current?.focus();
+  };
+  const openByCode=()=>{
+    // Somente um código válido do livro libera o início de um programa.
+    const {program,error}=resolveProgramCode(PROGRAMS,codeInput);
+    if(error){setCodeError(error);return;}
+    setCodeError('');
+    setCodeInput('');
+    if(game&&!game.finished&&game.program.code===program.code){
+      travel(THEMES[program.code].name,()=>{
+        setScreen('play');setThemeCode(program.code);scrollTop();
+      });
+    } else {
+      begin(program);
+    }
+  };
   const setEra=(code)=>travel((THEMES[code]||DEFAULT_THEME).name,()=>{
     setThemeCode(code);setAnnouncement(code?`Ambientação: ${THEMES[code].name}`:'Visual original restaurado');scrollTop();
   });
@@ -219,15 +248,50 @@ export default function App(){
           <Action title={mode==='book'?'Ir para o modo quiz':'Ir para o modo livro'} secondary theme={theme} onPress={swapMode}/>
         </View>
         <Text style={[styles.small,muted]}>{mode==='book'?`Modo ${bookModeName} · páginas originais`:'Modo quiz · enunciados e alternativas na tela'}</Text>
-        {game&&!game.finished&&<Action title={`Continuar programa ${game.program.code} · pergunta ${game.index+1}`} onPress={()=>{setScreen('play');scrollTop();}} theme={theme}/>}
+
+        <View style={styles.gatePanel}>
+          <View style={styles.gateHeader}>
+            <View style={{flex:1}}>
+              <Text style={styles.gateEyebrow}>PORTÃO DO TEMPO</Text>
+              <Text style={styles.gateTitle}>Acesso por código</Text>
+              <Text style={styles.gateSubtitle}>{codeGateEnabled?'ATIVADO · necessário para iniciar o quiz':'DESATIVADO · escolha livre de destinos'}</Text>
+            </View>
+            <Pressable testID="toggle-code-gate" accessibilityRole="switch" accessibilityLabel="Exigir código para iniciar programa"
+              accessibilityState={{checked:codeGateEnabled}} onPress={changeCodeGate}
+              style={[styles.gateToggle,codeGateEnabled&&styles.gateToggleOn]}>
+              <View style={[styles.gateToggleDot,codeGateEnabled&&styles.gateToggleDotOn]}/>
+              <Text style={styles.gateToggleLabel}>{codeGateEnabled?'ON':'OFF'}</Text>
+            </Pressable>
+          </View>
+          {codeGateEnabled ? <View style={styles.gateEntry}>
+            <Text style={styles.gateHint}>Desafio do códice: encontre no livro o número do programa que deseja explorar.</Text>
+            <Text style={styles.gateInputLabel}>CÓDIGO DO PROGRAMA</Text>
+            <View style={styles.gateEntryRow}>
+              <TextInput ref={codeInputRef} testID="program-code-input" accessibilityLabel="Digite código de três dígitos"
+                value={codeInput} onChangeText={value=>{setCodeInput(normalizeProgramCode(value));setCodeError('');}}
+                onSubmitEditing={openByCode} placeholder="•••" placeholderTextColor="#9B9B87"
+                keyboardType="number-pad" maxLength={3} returnKeyType="go" autoCorrect={false}
+                style={styles.gateInput}/>
+              <Pressable testID="submit-program-code" accessibilityRole="button" onPress={openByCode} style={styles.gateOpenButton}>
+                <Text style={styles.gateOpenText}>Abrir portal →</Text>
+              </Pressable>
+            </View>
+            {codeError ? <Text testID="program-code-error" accessibilityLiveRegion="polite" style={styles.gateError}>{codeError}</Text> : null}
+            <Text style={styles.gateFine}>Os códigos são os identificadores dos cinco programas do Pense Bem, não senhas pessoais. Os cartões abaixo ficam bloqueados neste modo.</Text>
+          </View> : <Text style={styles.gateFine}>Ative para jogar como um desafio de descoberta: somente quem digitar um código válido entra no quiz.</Text>}
+        </View>
+
+        {game&&!game.finished&&!codeGateEnabled&&<Action title={`Continuar programa ${game.program.code} · pergunta ${game.index+1}`} onPress={()=>{setScreen('play');scrollTop();}} theme={theme}/>}
         <View style={styles.sectionTop}><Text style={[styles.sectionTitle,ink]}>Escolha seu destino</Text><Text style={[styles.small,muted]}>5 programas · 30 questões cada</Text></View>
-        <View style={styles.cards}>{PROGRAMS.map((p,i)=><Pressable key={p.code} accessibilityRole="button" accessibilityLabel={`Iniciar programa ${p.code}`} onPress={()=>begin(p)}
-          style={({pressed})=>[styles.card,{borderColor:theme.border,width:width>=730?'48%':'100%',opacity:pressed?.72:1}]}>
+        <View style={styles.cards}>{PROGRAMS.map((p,i)=><Pressable key={p.code} testID={`destination-${p.code}`} accessibilityRole="button"
+          accessibilityLabel={codeGateEnabled?`Destino ${p.title} bloqueado. Digite código para entrar.`:`Iniciar programa ${p.code}`}
+          onPress={()=>codeGateEnabled?requestCode():begin(p)}
+          style={({pressed})=>[styles.card,{borderColor:codeGateEnabled?'#D8C8A4':theme.border,width:width>=730?'48%':'100%',opacity:pressed?.72:1}]}>
           <Image source={THEMES[p.code].image} resizeMode="contain" style={styles.cardArt}/>
           <View style={styles.cardCopy}>
-            <Text style={[styles.eyebrow,{color:theme.accent}]}>DESTINO 0{i+1} · CÓDIGO {p.code}</Text>
+            <Text style={[styles.eyebrow,{color:theme.accent}]}>{codeGateEnabled?`DESTINO 0${i+1} · ACESSO BLOQUEADO`:`DESTINO 0${i+1} · CÓDIGO ${p.code}`}</Text>
             <Text style={[styles.cardTitle,ink]}>{p.title}</Text>
-            <Text style={[styles.small,muted]}>30 perguntas · até 90 pontos →</Text>
+            <Text style={[styles.small,muted]}>{codeGateEnabled?'Digite o código no Portão do Tempo acima 🔒':'30 perguntas · até 90 pontos →'}</Text>
           </View>
         </Pressable>)}</View>
         <Text style={[styles.footer,muted]}>Projeto acadêmico baseado em Pense Bem — Disney: Viagem no Tempo (Tectoy / Nova Cultural, 1991). Sem vínculo oficial com os titulares das marcas. Questões adaptadas para estudo.</Text>
@@ -273,6 +337,7 @@ export default function App(){
           <Text style={[styles.sectionTitle,ink]}>Manual do viajante</Text>
           <Text style={[styles.body,muted]}>Cada programa tem 30 perguntas. Você tem três tentativas por pergunta: acertar na primeira vale 3 pontos, na segunda vale 2, na terceira vale 1; errar as três vale 0.</Text>
           <Text style={[styles.body,muted]}>Trocar de época e de modo mantém a questão e os pontos. Ao escolher outro destino, começa uma nova partida.</Text>
+          <Text style={[styles.body,muted]}>Na tela inicial, ative Acesso por código para exigir o número de três dígitos do programa. Com ele desligado, é possível escolher diretamente um destino. Os códigos de acesso não são os atalhos secretos de época.</Text>
           <Text style={[styles.sectionTitle,ink,{marginTop:18}]}>Códigos secretos</Text>
           <Text style={[styles.small,muted]}>Na web, pressione Shift e digite um código. No celular, use os botões abaixo:</Text>
           {Object.entries(SECRET_CODES).map(([secretCode,programCode])=><Action key={secretCode} theme={theme} secondary title={`${secretCode} · ${(THEMES[programCode]||DEFAULT_THEME).name}`} onPress={()=>setEra(programCode)}/>)}
@@ -304,6 +369,25 @@ const styles=StyleSheet.create({
   sectionTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap',marginTop:17,marginBottom:13},
   sectionTitle:{fontSize:20,lineHeight:26,fontWeight:'800'},cards:{flexDirection:'row',flexWrap:'wrap',gap:15,justifyContent:'space-between'},
   card:{borderWidth:1,borderRadius:16,overflow:'hidden',backgroundColor:'#FFFFFF'},cardArt:{width:'100%',height:190},cardCopy:{padding:19},cardTitle:{fontSize:20,fontWeight:'800',marginBottom:8},
+  gatePanel:{backgroundColor:'#133A32',borderRadius:17,borderWidth:1,borderColor:'#967D42',padding:18,marginTop:22,marginBottom:10},
+  gateHeader:{flexDirection:'row',gap:12,alignItems:'center',justifyContent:'space-between'},
+  gateEyebrow:{color:'#D9C18C',fontSize:10,fontWeight:'900',letterSpacing:1.7,marginBottom:5},
+  gateTitle:{color:'#FFFFFF',fontSize:21,fontWeight:'900'},
+  gateSubtitle:{color:'#B7DBCC',fontSize:11,marginTop:7},
+  gateToggle:{backgroundColor:'#61736D',borderRadius:30,borderWidth:1,borderColor:'#D3BE85',paddingVertical:8,paddingHorizontal:10,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7,minWidth:93,minHeight:49},
+  gateToggleOn:{backgroundColor:'#1D966C'},
+  gateToggleDot:{backgroundColor:'#C3C9C5',width:17,height:17,borderRadius:9},
+  gateToggleDotOn:{backgroundColor:'#EDE0A7'},
+  gateToggleLabel:{color:'#FFFFFF',fontSize:13,fontWeight:'900'},
+  gateEntry:{borderTopWidth:1,borderTopColor:'#496A5D',marginTop:16,paddingTop:16},
+  gateHint:{color:'#F5EBCB',fontSize:14,lineHeight:20,marginBottom:16},
+  gateInputLabel:{color:'#D9C18C',fontSize:10,fontWeight:'900',letterSpacing:1.4,marginBottom:7},
+  gateEntryRow:{flexDirection:'row',gap:10,alignItems:'center',flexWrap:'wrap'},
+  gateInput:{backgroundColor:'#091D18',color:'#F7E4A8',fontFamily:Platform.select({ios:'Courier New',android:'monospace',default:'monospace'}),fontSize:26,fontWeight:'900',letterSpacing:5,textAlign:'center',borderWidth:1,borderColor:'#A99663',borderRadius:10,width:116,minHeight:57,paddingVertical:10,paddingHorizontal:5},
+  gateOpenButton:{backgroundColor:'#D7A44B',borderRadius:10,minHeight:57,paddingVertical:14,paddingHorizontal:20,alignItems:'center',justifyContent:'center',flexGrow:1},
+  gateOpenText:{color:'#16291F',fontSize:15,fontWeight:'900'},
+  gateError:{color:'#FFD6A9',fontSize:12,fontWeight:'700',lineHeight:18,marginTop:10},
+  gateFine:{color:'#B7DBCC',fontSize:11,lineHeight:17,marginTop:10},
   footer:{fontSize:10,lineHeight:17,marginTop:24},miniBanner:{flexDirection:'row',alignItems:'center',borderRadius:14,overflow:'hidden',marginTop:2},bannerArt:{width:130,height:115},
   progress:{height:7,borderRadius:4,overflow:'hidden',marginBottom:9},questionCard:{backgroundColor:'#FFFFFF',borderWidth:1,borderRadius:18,padding:20,marginVertical:10},
   question:{fontSize:23,lineHeight:31,fontWeight:'800',marginBottom:15},link:{fontSize:13,fontWeight:'800',marginVertical:12},
