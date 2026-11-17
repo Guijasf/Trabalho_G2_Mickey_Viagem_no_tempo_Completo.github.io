@@ -22,7 +22,7 @@ function Button({ children, onPress, theme, outline, disabled, label }) {
 function TimePortal({ destination, onFinish }) {
   const progress = useRef(new Animated.Value(0)).current;
   const { width, height } = useWindowDimensions();
-  const size = Math.min(width * .72, height * .46, 310);
+  const size = Math.min(width * .68, height * .42, 310);
   useEffect(() => {
     let disposed = false;
     let animation;
@@ -38,15 +38,41 @@ function TimePortal({ destination, onFinish }) {
     return () => { disposed = true; animation?.stop(); subscription.remove(); };
   }, [progress, onFinish]);
   const rotation = progress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '300deg'] });
+  const counterRotation = progress.interpolate({ inputRange: [0, 1], outputRange: ['35deg', '-240deg'] });
+  const pulse = progress.interpolate({ inputRange: [0, .25, .45, .65, 1], outputRange: [.9, 1.04, .97, 1.06, 1] });
   const scale = progress.interpolate({ inputRange: [0, .2, .75, 1], outputRange: [.25, 1, 1.12, 2.5] });
   const opacity = progress.interpolate({ inputRange: [0, .15, .8, 1], outputRange: [0, 1, 1, 0] });
   return <Modal transparent visible animationType="none" onRequestClose={onFinish}>
     <View style={portalStyles.overlay} accessibilityViewIsModal>
       <Text style={portalStyles.eyebrow}>COORDENADAS TEMPORAIS DEFINIDAS</Text>
       <View style={{ width: size, height: size, marginVertical: 28 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Animated.View style={[portalStyles.vortex, { width: size, height: size, opacity, transform: [{ rotate: rotation }, { scale }] }]}>
-          {[1, .8, .6, .4].map((ratio, index) => <View key={ratio} style={[portalStyles.ring, { width: size * ratio, height: size * ratio, borderColor: index % 2 ? '#E5C47B' : '#75DBE5', borderTopColor: 'transparent', borderBottomColor: 'transparent', transform: [{ rotate: `${index * 45}deg` }] }]} />)}
-          <View style={portalStyles.core} />
+        <Animated.View style={[portalStyles.vortex, { width: size, height: size, opacity, transform: [{ scale }] }]}>
+          <Animated.View style={[portalStyles.halo, { width: size * 1.18, height: size * 1.18, transform: [{ scale: pulse }] }]} />
+          <Animated.View style={[portalStyles.surface, { width: size, height: size, transform: [{ rotate: rotation }] }]}>
+            {Array.from({ length: 18 }, (_, index) => {
+              const angle = index * Math.PI * 2 / 18;
+              const diameter = size * (.13 + (index % 3) * .018);
+              return <View key={index} style={[portalStyles.lobe, { width: diameter, height: diameter, left: size / 2 + Math.cos(angle) * size * .455 - diameter / 2, top: size / 2 + Math.sin(angle) * size * .455 - diameter / 2, backgroundColor: index % 3 ? '#B8EF45' : '#D5FA74' }]} />;
+            })}
+          </Animated.View>
+          <Animated.View style={[portalStyles.vortex, { width: size * .9, height: size * .9, transform: [{ rotate: counterRotation }] }]}>
+            {[1, .79, .58, .37].map((ratio, index) => <View key={ratio} style={[portalStyles.ring, {
+              width: size * .88 * ratio, height: size * .82 * ratio,
+              borderWidth: size * .032, borderColor: index % 2 ? '#D8F88B' : '#78BB25',
+              borderLeftColor: 'transparent', borderBottomColor: index % 2 ? '#A5DD35' : 'transparent',
+              borderTopLeftRadius: size * .24, borderTopRightRadius: size * .4,
+              borderBottomLeftRadius: size * .38, borderBottomRightRadius: size * .25,
+              transform: [{ rotate: `${index * 67}deg` }, { translateX: size * .016 * index }],
+            }]} />)}
+            <View style={portalStyles.core} />
+          </Animated.View>
+          {Array.from({ length: 9 }, (_, index) => {
+            const angle = index * Math.PI * 2 / 9;
+            return <Animated.View key={index} style={[portalStyles.speck, { width: 5 + index % 3 * 3, height: 5 + index % 3 * 3,
+              left: size / 2 + Math.cos(angle) * size * .59, top: size / 2 + Math.sin(angle) * size * .59,
+              transform: [{ scale: pulse }], opacity: .45 + index % 3 * .2,
+            }]} />;
+          })}
         </Animated.View>
       </View>
       <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={portalStyles.title}>Próxima parada: {destination}</Text>
@@ -56,14 +82,18 @@ function TimePortal({ destination, onFinish }) {
   </Modal>;
 }
 const portalStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: '#101C30', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'hidden' },
-  eyebrow: { color: '#B1D0DF', fontSize: 10, letterSpacing: 2, textAlign: 'center' },
+  overlay: { flex: 1, backgroundColor: '#08150E', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'hidden' },
+  eyebrow: { color: '#BCD2A3', fontSize: 10, letterSpacing: 2, textAlign: 'center' },
   vortex: { alignItems: 'center', justifyContent: 'center' },
-  ring: { position: 'absolute', borderWidth: 5, borderRadius: 999 },
-  core: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E4FBFF' },
+  halo: { position: 'absolute', borderRadius: 999, backgroundColor: '#65C52B', opacity: .12 },
+  surface: { position: 'absolute', borderRadius: 999, backgroundColor: '#9CDB35', borderWidth: 7, borderColor: '#D5FA74' },
+  lobe: { position: 'absolute', borderRadius: 999 },
+  ring: { position: 'absolute' },
+  core: { width: 25, height: 20, borderRadius: 14, backgroundColor: '#E5FFA6', transform: [{ rotate: '-25deg' }] },
+  speck: { position: 'absolute', borderRadius: 99, backgroundColor: '#C8FA69' },
   title: { color: '#FFF6E4', fontSize: 25, lineHeight: 33, fontWeight: '800', textAlign: 'center', maxWidth: 480 },
-  caption: { color: '#B1D0DF', fontSize: 14, marginTop: 12 },
-  skip: { marginTop: 26, padding: 16, minHeight: 48, borderWidth: 1, borderColor: '#63869E', borderRadius: 30 },
+  caption: { color: '#BCD2A3', fontSize: 14, marginTop: 12 },
+  skip: { marginTop: 26, padding: 16, minHeight: 48, borderWidth: 1, borderColor: '#739F45', borderRadius: 30 },
   skipText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
 });
 
