@@ -1,5 +1,5 @@
 import React, { useReducer, useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, Modal, StatusBar, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, Modal, StatusBar, useWindowDimensions, Platform, Animated, Easing, AccessibilityInfo } from 'react-native';
 import { PROGRAMS } from './data';
 import { PAGES } from './pages';
 import { gameReducer } from './engine';
@@ -18,6 +18,55 @@ function Button({ children, onPress, theme, outline, disabled, label }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} onPress={onPress} disabled={disabled} style={({ pressed }) => [s.button, { backgroundColor: outline ? 'transparent' : theme.accent, borderColor: theme.accent }, (pressed || disabled) && { opacity: .5 }]}><Text style={[s.buttonText, { color: outline ? theme.accent : '#FFF' }]}>{children}</Text></Pressable>;
 }
 
+// Mounted only during a trip; stopping the animation also cancels its completion.
+function TimePortal({ destination, onFinish }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const { width, height } = useWindowDimensions();
+  const size = Math.min(width * .72, height * .46, 310);
+  useEffect(() => {
+    let disposed = false;
+    let animation;
+    const finish = () => { if (!disposed) onFinish(); };
+    const begin = reduced => {
+      if (disposed) return;
+      if (reduced) { finish(); return; }
+      animation = Animated.timing(progress, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.cubic), useNativeDriver: Platform.OS !== 'web' });
+      animation.start(({ finished }) => { if (finished) finish(); });
+    };
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', reduced => { if (reduced) finish(); });
+    AccessibilityInfo.isReduceMotionEnabled().then(begin, () => begin(true));
+    return () => { disposed = true; animation?.stop(); subscription.remove(); };
+  }, [progress, onFinish]);
+  const rotation = progress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '300deg'] });
+  const scale = progress.interpolate({ inputRange: [0, .2, .75, 1], outputRange: [.25, 1, 1.12, 2.5] });
+  const opacity = progress.interpolate({ inputRange: [0, .15, .8, 1], outputRange: [0, 1, 1, 0] });
+  return <Modal transparent visible animationType="none" onRequestClose={onFinish}>
+    <View style={portalStyles.overlay} accessibilityViewIsModal>
+      <Text style={portalStyles.eyebrow}>COORDENADAS TEMPORAIS DEFINIDAS</Text>
+      <View style={{ width: size, height: size, marginVertical: 28 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Animated.View style={[portalStyles.vortex, { width: size, height: size, opacity, transform: [{ rotate: rotation }, { scale }] }]}>
+          {[1, .8, .6, .4].map((ratio, index) => <View key={ratio} style={[portalStyles.ring, { width: size * ratio, height: size * ratio, borderColor: index % 2 ? '#E5C47B' : '#75DBE5', borderTopColor: 'transparent', borderBottomColor: 'transparent', transform: [{ rotate: `${index * 45}deg` }] }]} />)}
+          <View style={portalStyles.core} />
+        </Animated.View>
+      </View>
+      <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={portalStyles.title}>Próxima parada: {destination}</Text>
+      <Text style={portalStyles.caption}>Atravessando o tempo…</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Pular animação de viagem" onPress={onFinish} style={portalStyles.skip}><Text style={portalStyles.skipText}>Pular viagem →</Text></Pressable>
+    </View>
+  </Modal>;
+}
+const portalStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: '#101C30', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'hidden' },
+  eyebrow: { color: '#B1D0DF', fontSize: 10, letterSpacing: 2, textAlign: 'center' },
+  vortex: { alignItems: 'center', justifyContent: 'center' },
+  ring: { position: 'absolute', borderWidth: 5, borderRadius: 999 },
+  core: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E4FBFF' },
+  title: { color: '#FFF6E4', fontSize: 25, lineHeight: 33, fontWeight: '800', textAlign: 'center', maxWidth: 480 },
+  caption: { color: '#B1D0DF', fontSize: 14, marginTop: 12 },
+  skip: { marginTop: 26, padding: 16, minHeight: 48, borderWidth: 1, borderColor: '#63869E', borderRadius: 30 },
+  skipText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+});
+
 export default function App() {
   const [game, dispatch] = useReducer(gameReducer, null);
   const [screen, setScreen] = useState('home');
@@ -27,6 +76,8 @@ export default function App() {
   const [zoom, setZoom] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
   const [announcement, setAnnouncement] = useState('');
+  const [trip, setTrip] = useState(null);
+  const tripAction = useRef(null);
   const scroll = useRef(null);
   const secret = useRef(emptySecret());
   const { width } = useWindowDimensions();
@@ -39,8 +90,26 @@ export default function App() {
   const ink = { color: theme.ink };
   const muted = { color: theme.muted };
   const top = () => scroll.current?.scrollTo({ y: 0, animated: false });
-  const activateTheme = code => { setThemeCode(code); setAnnouncement(code ? `Época desbloqueada: ${THEMES[code].name}` : 'Visual original restaurado'); };
-  const start = program => { dispatch({ type: 'START', program }); setScreen('play'); top(); };
+  const finishTrip = React.useCallback(() => {
+    const action = tripAction.current;
+    tripAction.current = null;
+    setTrip(null);
+    action?.();
+  }, []);
+  const travel = (destination, action) => {
+    if (tripAction.current) return;
+    setHelp(false);
+    setZoom(false);
+    tripAction.current = action;
+    setTrip(destination);
+  };
+  const activateTheme = code => travel((THEMES[code] || DEFAULT_THEME).name, () => {
+    setThemeCode(code);
+    setAnnouncement(code ? `Época desbloqueada: ${THEMES[code].name}` : 'Visual original restaurado');
+  });
+  const start = program => travel(THEMES[program.code].name, () => {
+    dispatch({ type: 'START', program }); setScreen('play'); top();
+  });
   const next = () => { dispatch({ type: 'NEXT' }); top(); };
   const toggleMode = () => { setMode(m => m === 'book' ? 'quiz' : 'book'); setAnnouncement('Modo alterado. Seu progresso foi mantido.'); };
   const openPage = () => { setZoomScale(1); setZoom(true); };
@@ -60,6 +129,7 @@ export default function App() {
   const page = <Pressable accessibilityRole="button" accessibilityLabel="Ampliar página do livro" onPress={openPage} style={[s.page, { borderColor: theme.line }]}><Image source={PAGES[question?.page]} accessibilityLabel={`Página ${question?.printedPage} do livro, questão ${question?.id}`} resizeMode="contain" style={{ width: '100%', aspectRatio: 1 / 1.3 }} /><Text style={[s.small, { color: theme.accent, textAlign: 'center', padding: 10 }]}>TOQUE PARA AMPLIAR ↗</Text></Pressable>;
 
   return <View style={[s.root, { backgroundColor: theme.background }]}>
+    {trip && <TimePortal destination={trip} onFinish={finishTrip} />}
     <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
     <ScrollView ref={scroll} contentContainerStyle={[s.container, width > 800 && { paddingHorizontal: 36 }]}>
       <View style={[s.header, { borderColor: theme.line }]}>

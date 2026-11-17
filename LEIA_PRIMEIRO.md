@@ -77,3 +77,10 @@ O [guia em PDF](docs/Guia_G2_Viagem_no_Tempo.pdf) é um apoio de revisão, não 
 - assets/era-*.png e journey.png: seis imagens fornecidas pelo usuário com Mickey e a turma, exibidas inteiras, sem novos recortes. Não substituem imagens usadas pelos exercícios. Ver [créditos](docs/IMAGENS.md).
 
 Material acadêmico sem vínculo oficial com Disney ou Tectoy.
+
+
+### Portal de viagem no tempo
+
+Ao iniciar/recomeçar um programa ou ativar um tema pelos códigos secretos ou pela ajuda, um portal de 1,8 segundo anuncia o destino. O botão **Pular viagem** (ou Voltar no Android) conclui a transição imediatamente. A preferência de acessibilidade por movimento reduzido dispensa a animação. Trocar o tema mantém pontos, tentativas e questão; iniciar ou recomeçar um programa inicia uma nova partida, como antes. Pedidos simultâneos de viagem são ignorados até o término da transição.
+
+Validação: `npm test`, `npm run export:web` e `node scripts/build-snack.mjs --check`. Conferidos no navegador: entrada em destino, conclusão automática, troca pela ajuda, pular e manutenção das tentativas/pontos. A execução nativa Android/iOS ainda não foi testada.
