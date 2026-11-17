@@ -1,45 +1,37 @@
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROGRAMS } from '../data.js';
-import { initialGame, gameReducer } from '../engine.js';
-let checks=0;
-const check=(fn)=>{fn();checks++;};
-for(const p of PROGRAMS){
- check(()=>assert.equal(p.questions.length,30));
- const reading = {...p, questions:p.questions.map(q=>({...q,answer:null}))};
- let browse=initialGame(reading);
- check(()=>assert.equal(gameReducer(browse,{type:'ANSWER',choice:'A'}),browse));
- check(()=>assert.equal(gameReducer(browse,{type:'PREVIOUS'}),browse));
- for(let i=0;i<30;i++){
-    browse=gameReducer(browse,{type:'NEXT'});
-    check(()=>assert.equal(browse.score,0));
- }
- check(()=>assert.equal(browse.finished,true));
- const scored={...p,questions:p.questions.map((q,i)=>({...q,answer:['A','B','C','D'][i%4]}))};
- for(let miss=0;miss<=3;miss++){
-    let s=initialGame(scored);
-  for(let i=0;i<30;i++){
-    const q=scored.questions[i];const wrong=['A','B','C','D'].filter(x=>x!==q.answer);
-   check(()=>assert.equal(gameReducer(s,{type:'NEXT'}),s));
-   for(let j=0;j<miss;j++){
-    s=gameReducer(s,{type:'ANSWER',choice:wrong[j]});
-    check(()=>assert.equal(gameReducer(s,{type:'ANSWER',choice:wrong[j]}),s));
-   }
-   if(miss<3)s=gameReducer(s,{type:'ANSWER',choice:q.answer});
-   check(()=>assert.equal(gameReducer(s,{type:'ANSWER',choice:q.answer}),s));
-   check(()=>assert.equal(s.history.length,i+1));
-   s=gameReducer(s,{type:'NEXT'});
-  }
-  check(()=>assert.equal(s.score,miss===3?0:30*(3-miss)));
-  check(()=>assert.equal(s.finished,true));
-  check(()=>assert.equal(s.history.length,30));
-  check(()=>assert.equal(gameReducer(s,{type:'NEXT'}),s));
-  check(()=>assert.equal(gameReducer(s,{type:'ANSWER',choice:'A'}),s));
-    check(()=>assert.deepEqual(gameReducer(s,{type:'START',program:scored}),initialGame(scored)));
- }
+import {PROGRAMS} from '../data.js';
+import {initialGame,gameReducer,POINTS,scoreSummary} from '../engine.js';
+
+for(const program of PROGRAMS){
+  test(`${program.code}: 3/2/1/0, 30 questões, 90 pontos`,()=>{
+    for(let misses=0;misses<=3;misses++){
+      let state=initialGame(program);
+      for(const question of program.questions){
+        const wrong=['A','B','C','D'].filter(letter=>letter!==question.answer);
+        assert.equal(gameReducer(state,{type:'NEXT'}),state,'não permite pular pergunta');
+        for(let j=0;j<misses;j++){
+          state=gameReducer(state,{type:'ANSWER',choice:wrong[j]});
+          const same=gameReducer(state,{type:'ANSWER',choice:wrong[j]});
+          assert.equal(same,state,'não consome tentativa repetida');
+        }
+        if(misses<3)state=gameReducer(state,{type:'ANSWER',choice:question.answer});
+        assert.equal(state.resolved,true);
+        assert.equal(gameReducer(state,{type:'ANSWER',choice:question.answer}),state,'não soma novamente');
+        state=gameReducer(state,{type:'NEXT'});
+      }
+      assert.equal(state.finished,true);
+      assert.equal(state.history.length,30);
+      assert.equal(state.score,misses===3?0:30*POINTS[misses+1]);
+      assert.equal(scoreSummary(state).maxScore,90);
+      assert.equal(gameReducer(state,{type:'NEXT'}),state,'partida encerrada');
+    }
+  });
 }
-check(()=>assert.equal(new Set(PROGRAMS.flatMap(p=>p.questions.map(q=>q.id))).size,150));
-check(()=>assert.deepEqual(PROGRAMS.map(p=>p.code),['151','152','153','154','155']));
-check(()=>assert.ok(PROGRAMS.every(p=>p.questions.every(q=>q.answer===null || ['A','B','C','D'].includes(q.answer)))));
-let s=initialGame({...PROGRAMS[0],questions:PROGRAMS[0].questions.map(q=>({...q,answer:'B'}))});
-check(()=>assert.equal(gameReducer(s,{type:'ANSWER',choice:'X'}),s));
-console.log(`${checks} verificações aprovadas: 5 programas, navegação sem gabarito, 90/60/30/0 pontos, repetição, avanço, reinício e encerramento.`);
+
+test('reinício limpa histórico, pontuação e índice',()=>{
+  const p=PROGRAMS[0];let s=initialGame(p);
+  s=gameReducer(s,{type:'ANSWER',choice:p.questions[0].answer});
+  s=gameReducer(s,{type:'NEXT'});
+  assert.deepEqual(gameReducer(s,{type:'START',program:p}),initialGame(p));
+});

@@ -1,6 +1,5 @@
-// Adaptado das páginas locais; letras seguem a ordem vermelho/amarelo/azul/verde.
-// Respostas são interpretações editoriais, NÃO um gabarito oficial recebido.
-// '?' mantém a correção desativada até revisão com o gabarito original.
+// Questões adaptadas das páginas do livro Disney - Viagem no Tempo (1991).
+// IMPORTANTE: o gabarito NÃO é oficial. Verifique as 150 respostas antes de entregar.
 const rows = [
   [1, 'Como se chama o período apresentado no livro entre aproximadamente 500.000 e 4.000 a.C.?', ['Idade Média','Anos Dourados','Pré-História','Pós-Moderno'], 'C'],
   [2, 'Complete a referência de tempo usada na página: 500.000 a 4.000 anos…', ['bissextos','lunares','depois da Chuva','antes de Cristo'], 'D'],
@@ -122,12 +121,12 @@ const rows = [
   [118, 'Qual origem o exercício atribui ao desenho de número 118?', ['Africano','Japonês','Croata','Inca'], 'D', true],
   [119, 'Qual é a origem do desenho de número 119?', ['Maia','Tolteca','Hindu','Egípcio'], 'D', true],
   [120, 'Qual origem o livro atribui ao desenho de número 120?', ['Grego','Romano','Sírio','Chinês'], '?', true],
-  [121, 'O que é a figura A? A figura não está visível no arquivo disponível.', ['Triângulo','Pirâmide','Castelo','Estátua'], '?'],
-  [122, 'O que é a figura B? A figura não está visível no arquivo disponível.', ['Câmara da princesa','Quarto de dormir','Sala de jantar','Câmara do faraó'], '?'],
-  [123, 'O que é a figura C? A figura não está visível no arquivo disponível.', ['Sarcófago','Fargósaco','Sarfágoco','Gorsáfaco'], '?'],
+  [121, 'O que é a figura A? A figura não está visível no arquivo disponível.', ['Triângulo','Pirâmide','Castelo','Estátua'], '?', true],
+  [122, 'O que é a figura B? A figura não está visível no arquivo disponível.', ['Câmara da princesa','Quarto de dormir','Sala de jantar','Câmara do faraó'], '?', true],
+  [123, 'O que é a figura C? A figura não está visível no arquivo disponível.', ['Sarcófago','Fargósaco','Sarfágoco','Gorsáfaco'], '?', true],
   [124, 'O que é a figura identificada com a letra D?', ['Fantasma','Múmia','Defunto','Boneco'], 'B', true],
-  [125, 'O que é a figura E? A figura não está visível no arquivo disponível.', ['Letras cuneiformes','Ideogramas','Desenhinhos','Hieroglifos'], '?'],
-  [126, 'O que é a figura F? A figura não está visível no arquivo disponível.', ['Esfinge','Estátua','Monumento','Mausoléu'], '?'],
+  [125, 'O que é a figura E? A figura não está visível no arquivo disponível.', ['Letras cuneiformes','Ideogramas','Desenhinhos','Hieroglifos'], '?', true],
+  [126, 'O que é a figura F? A figura não está visível no arquivo disponível.', ['Esfinge','Estátua','Monumento','Mausoléu'], '?', true],
   [127, 'Quem governava o Egito Antigo?', ['Presidente','Faraó','Ditador','Ministro'], 'B'],
   [128, 'O que os faraós eram considerados?', ['Mestres da Lua','Primos da Chuva','Filhos do Sol','Juízes das Disputas'], 'C'],
   [129, 'Quais são os nomes das pirâmides destacadas no exercício?', ['Quepes, Quefrio, Minguelinos','Quéops, Quefrei, Miguerinos','Quéops, Quéfren, Miquerinos','Quérops, Quéfren, Miguelinos'], 'C'],
@@ -160,8 +159,22 @@ const wordTables = [
   ['hicsos','no','os','também','cavalo','eles','o','que','introduziram','do','ferro','Egito','foram','uso','amarelo'],
 ];
 
+// 18 hipóteses de correção, NENHUMA confirmada por gabarito oficial.
+// Para a entrega, conferir no livro: especialmente 121-126 (figuras ausentes no scan).
+export const GABARITO_PROVISORIO = Object.freeze({
+  30:'C',32:'D',36:'A',37:'B',40:'D',49:'A',54:'C',62:'A',64:'B',73:'B',83:'D',99:'B',120:'D',
+  121:'B',122:'D',123:'A',125:'D',126:'A',
+});
+export const QUESTOES_PROVISORIAS = Object.freeze(Object.keys(GABARITO_PROVISORIO).map(Number));
+
 export const CONTENT = Object.fromEntries(rows.map(([id, prompt, options, key, visual = false]) => [id, {
-  prompt, options, answer: key === '?' ? null : key, visual,
+  id,
+  prompt,
+  options,
+  answer: key === '?' ? GABARITO_PROVISORIO[id] : key,
+  originalAnswer: key === '?' ? null : key,
+  visual,
   context: id >= 134 && id <= 139 ? wordTables[Math.floor((id - 134) / 2)].map((word, index) => `${index + 1}: ${word}`).join(' · ') : null,
-  answerStatus: key === '?' ? 'pending' : 'interpreted',
+  answerStatus: key === '?' ? 'provisional' : 'interpreted',
+  imageMissing: id >= 121 && id <= 126 && id !== 124,
 }]));

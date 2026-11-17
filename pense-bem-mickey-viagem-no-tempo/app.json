@@ -1,6 +1,11 @@
 {
   "expo": {
-    "name": "Pense Bem: Viagem no Tempo",
-    "slug": "pense-bem-viagem-no-tempo"
+    "name": "Pense Bem - Mickey Viagem no Tempo",
+    "slug": "pense-bem-mickey-viagem-no-tempo",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android", "ios", "web"],
+    "web": {"name": "Pense Bem - Mickey Viagem no Tempo"}
   }
 }

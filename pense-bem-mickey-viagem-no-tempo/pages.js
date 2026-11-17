@@ -1,27 +1,3 @@
-export const PAGES = {
-  5: require('./assets/page-05.jpg'),
-  6: require('./assets/page-06.jpg'),
-  7: require('./assets/page-07.jpg'),
-  8: require('./assets/page-08.jpg'),
-  9: require('./assets/page-09.jpg'),
-  11: require('./assets/page-11.jpg'),
-  12: require('./assets/page-12.jpg'),
-  13: require('./assets/page-13.jpg'),
-  14: require('./assets/page-14.jpg'),
-  15: require('./assets/page-15.jpg'),
-  17: require('./assets/page-17.jpg'),
-  18: require('./assets/page-18.jpg'),
-  19: require('./assets/page-19.jpg'),
-  20: require('./assets/page-20.jpg'),
-  21: require('./assets/page-21.jpg'),
-  23: require('./assets/page-23.jpg'),
-  24: require('./assets/page-24.jpg'),
-  25: require('./assets/page-25.jpg'),
-  26: require('./assets/page-26.jpg'),
-  27: require('./assets/page-27.jpg'),
-  29: require('./assets/page-29.jpg'),
-  30: require('./assets/page-30.jpg'),
-  31: require('./assets/page-31.jpg'),
-  32: require('./assets/page-32.jpg'),
-  33: require('./assets/page-33.jpg')
-};
+const BOOK_IMAGE_ROOT='https://raw.githubusercontent.com/Guijasf/Trabalho_G2_Mickey_Viagem_no_tempo_Completo.github.io/main/pense-bem-mickey-viagem-no-tempo/assets/';
+export const PAGE_NUMBERS=[5,6,7,8,9,11,12,13,14,15,17,18,19,20,21,23,24,25,26,27,29,30,31,32,33];
+export const PAGES=Object.fromEntries(PAGE_NUMBERS.map(page=>[page,{uri:BOOK_IMAGE_ROOT+`page-${String(page).padStart(2,'0')}.jpg`} ]));

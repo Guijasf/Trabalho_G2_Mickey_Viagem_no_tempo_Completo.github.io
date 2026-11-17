@@ -1,5 +1,8 @@
 node_modules/
 .expo/
-dist/
 web-build/
-.env
+dist/
+*.log
+.DS_Store
+.env*
+!*.example

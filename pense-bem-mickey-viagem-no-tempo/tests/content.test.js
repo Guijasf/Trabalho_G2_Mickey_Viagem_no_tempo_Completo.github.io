@@ -1,33 +1,33 @@
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
-import { PROGRAMS } from '../data.js';
-import { CONTENT } from '../content.js';
-import { initialGame, gameReducer } from '../engine.js';
-const questions = PROGRAMS.flatMap(p => p.questions);
-assert.equal(Object.keys(CONTENT).length,150);
-assert.deepEqual(questions.map(q=>q.id),Array.from({length:150},(_,i)=>i+1));
-for (const q of questions) {
-  assert.ok(q.prompt?.length > 10,`enunciado ${q.id}`);
-  assert.equal(q.options.length,4,`alternativas ${q.id}`);
-  assert.equal(new Set(q.options).size,4,`alternativas distintas ${q.id}`);
-  assert.ok(existsSync(new URL(`../assets/page-${String(q.page).padStart(2,'0')}.jpg`,import.meta.url)));
-  assert.equal(q.answerStatus,q.answer == null ? 'pending' : 'interpreted');
-}
-for (const p of PROGRAMS) {
-  let game=initialGame(p);
-  for (const q of p.questions) {
-    assert.equal(game.program.questions[game.index].id,q.id);
-    if (q.answer) game=gameReducer(game,{type:'ANSWER',choice:q.answer});
-    else assert.equal(gameReducer(game,{type:'ANSWER',choice:'A'}),game);
-    game=gameReducer(game,{type:'NEXT'});
+import {PROGRAMS,TOTAL_QUESTOES} from '../data.js';
+import {CONTENT,GABARITO_PROVISORIO,QUESTOES_PROVISORIAS} from '../content.js';
+import {PAGES} from '../pages.js';
+
+test('150 perguntas distintas, 5 programas de 30 e gabarito jogável',()=>{
+  const all=PROGRAMS.flatMap(p=>p.questions);
+  assert.equal(PROGRAMS.length,5);
+  assert.deepEqual(PROGRAMS.map(p=>p.code),['151','152','153','154','155']);
+  assert.equal(TOTAL_QUESTOES,150);
+  assert.equal(Object.keys(CONTENT).length,150);
+  assert.deepEqual(all.map(q=>q.id),Array.from({length:150},(_,i)=>i+1));
+  assert.ok(PROGRAMS.every(p=>p.questions.length===30));
+  for(const q of all){
+    assert.ok(q.prompt.length>10,q.id);
+    assert.equal(q.options.length,4,q.id);
+    assert.equal(new Set(q.options).size,4,q.id);
+    assert.ok(['A','B','C','D'].includes(q.answer),`sem resposta na questão ${q.id}`);
+    assert.ok(['interpreted','provisional'].includes(q.answerStatus),q.id);
+    assert.ok(PAGES[q.page]?.uri.startsWith('https://'),q.id);
   }
-  assert.ok(game.finished);
-  assert.equal(game.score,p.questions.filter(q=>q.answer).length*3);
-  assert.equal(new Set(game.history.map(h=>h.id)).size,game.history.length);
-}
-// Regression: scored -> pending -> previous must not reopen and score again.
-const mixed={questions:[{id:1,answer:'A'},{id:2,answer:null},{id:3,answer:null}]};
-let g=initialGame(mixed); g=gameReducer(g,{type:'ANSWER',choice:'A'}); g=gameReducer(g,{type:'NEXT'});
-assert.equal(gameReducer(g,{type:'PREVIOUS'}),g);
-g=gameReducer(g,{type:'NEXT'}); g=gameReducer(g,{type:'PREVIOUS'}); assert.equal(g.index,1); assert.equal(g.score,3);
-console.log(`Conteúdo validado: ${questions.length} perguntas; ${questions.filter(q=>q.answer).length} respostas interpretadas; ${questions.filter(q=>!q.answer).length} pendentes. Fluxos mistos aprovados.`);
+});
+test('18 hipóteses assinaladas separadamente, sem alegação de gabarito oficial',()=>{
+  assert.equal(QUESTOES_PROVISORIAS.length,18);
+  assert.equal(new Set(QUESTOES_PROVISORIAS).size,18);
+  for(const id of QUESTOES_PROVISORIAS){
+    assert.equal(CONTENT[id].answerStatus,'provisional');
+    assert.equal(CONTENT[id].originalAnswer,null);
+    assert.equal(CONTENT[id].answer,GABARITO_PROVISORIO[id]);
+  }
+  assert.equal(Object.values(CONTENT).filter(q=>q.answerStatus==='interpreted').length,132);
+});

@@ -1,231 +1,283 @@
-import React, { useReducer, useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, Modal, StatusBar, useWindowDimensions, Platform, Animated, Easing, AccessibilityInfo } from 'react-native';
-import { PROGRAMS } from './data';
-import { PAGES } from './pages';
-import { gameReducer } from './engine';
-import { THEMES, DEFAULT_THEME } from './themes';
-import { readSecret, emptySecret, SECRET_CODES } from './secret-codes';
+import React,{useReducer,useState,useRef,useEffect,useCallback} from 'react';
+import {View,Text,StyleSheet,ScrollView,Pressable,Image,Modal,StatusBar,Platform,Animated,Easing,AccessibilityInfo,useWindowDimensions} from 'react-native';
+import {PROGRAMS} from './data';
+import {initialGame,gameReducer,LETTERS,scoreSummary} from './engine';
+import {PAGES} from './pages';
+import {DEFAULT_THEME,THEMES} from './themes';
+import {SECRET_CODES,emptySecret,readSecret} from './secret-codes';
 
-const OPTIONS = [
-  { key: 'A', name: 'Vermelho', color: '#B6382D' },
-  { key: 'B', name: 'Amarelo', color: '#8C650E' },
-  { key: 'C', name: 'Azul', color: '#286B9B' },
-  { key: 'D', name: 'Verde', color: '#29734E' },
+const BUTTONS=[
+  {key:'A',name:'Vermelho',color:'#ED272A'},
+  {key:'B',name:'Amarelo',color:'#F3CF25'},
+  {key:'C',name:'Azul',color:'#254BE7'},
+  {key:'D',name:'Verde',color:'#178641'},
 ];
-const totalPending = PROGRAMS.flatMap(p => p.questions).filter(q => q.answer == null).length;
+const ALL=PROGRAMS.flatMap(p=>p.questions);
+const PROVISIONAL_COUNT=ALL.filter(q=>q.answerStatus==='provisional').length;
 
-function Button({ children, onPress, theme, outline, disabled, label }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} onPress={onPress} disabled={disabled} style={({ pressed }) => [s.button, { backgroundColor: outline ? 'transparent' : theme.accent, borderColor: theme.accent }, (pressed || disabled) && { opacity: .5 }]}><Text style={[s.buttonText, { color: outline ? theme.accent : '#FFF' }]}>{children}</Text></Pressable>;
+function Action({title,onPress,theme,secondary=false,disabled=false,testID}) {
+  return <Pressable testID={testID} accessibilityRole="button" accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
+    style={({pressed})=>[styles.action,{backgroundColor:secondary?'transparent':theme.accent,borderColor:theme.accent,opacity:disabled?.45:pressed?.72:1}]}>
+    <Text style={[styles.actionText,{color:secondary?theme.accent:'#FFFFFF'}]}>{title}</Text>
+  </Pressable>;
 }
-
-// Mounted only during a trip; stopping the animation also cancels its completion.
-function TimePortal({ destination, onFinish }) {
-  const progress = useRef(new Animated.Value(0)).current;
-  const { width, height } = useWindowDimensions();
-  const size = Math.min(width * .68, height * .42, 310);
-  useEffect(() => {
-    let disposed = false;
-    let animation;
-    const finish = () => { if (!disposed) onFinish(); };
-    const begin = reduced => {
-      if (disposed) return;
-      if (reduced) { finish(); return; }
-      animation = Animated.timing(progress, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.cubic), useNativeDriver: Platform.OS !== 'web' });
-      animation.start(({ finished }) => { if (finished) finish(); });
-    };
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', reduced => { if (reduced) finish(); });
-    AccessibilityInfo.isReduceMotionEnabled().then(begin, () => begin(true));
-    return () => { disposed = true; animation?.stop(); subscription.remove(); };
-  }, [progress, onFinish]);
-  const rotation = progress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '300deg'] });
-  const counterRotation = progress.interpolate({ inputRange: [0, 1], outputRange: ['35deg', '-240deg'] });
-  const pulse = progress.interpolate({ inputRange: [0, .25, .45, .65, 1], outputRange: [.9, 1.04, .97, 1.06, 1] });
-  const scale = progress.interpolate({ inputRange: [0, .2, .75, 1], outputRange: [.25, 1, 1.12, 2.5] });
-  const opacity = progress.interpolate({ inputRange: [0, .15, .8, 1], outputRange: [0, 1, 1, 0] });
-  return <Modal transparent visible animationType="none" onRequestClose={onFinish}>
-    <View style={portalStyles.overlay} accessibilityViewIsModal>
-      <Text style={portalStyles.eyebrow}>COORDENADAS TEMPORAIS DEFINIDAS</Text>
-      <View style={{ width: size, height: size, marginVertical: 28 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Animated.View style={[portalStyles.vortex, { width: size, height: size, opacity, transform: [{ scale }] }]}>
-          <Animated.View style={[portalStyles.halo, { width: size * 1.18, height: size * 1.18, transform: [{ scale: pulse }] }]} />
-          <Animated.View style={[portalStyles.surface, { width: size, height: size, transform: [{ rotate: rotation }] }]}>
-            {Array.from({ length: 18 }, (_, index) => {
-              const angle = index * Math.PI * 2 / 18;
-              const diameter = size * (.13 + (index % 3) * .018);
-              return <View key={index} style={[portalStyles.lobe, { width: diameter, height: diameter, left: size / 2 + Math.cos(angle) * size * .455 - diameter / 2, top: size / 2 + Math.sin(angle) * size * .455 - diameter / 2, backgroundColor: index % 3 ? '#B8EF45' : '#D5FA74' }]} />;
-            })}
-          </Animated.View>
-          <Animated.View style={[portalStyles.vortex, { width: size * .9, height: size * .9, transform: [{ rotate: counterRotation }] }]}>
-            {[1, .79, .58, .37].map((ratio, index) => <View key={ratio} style={[portalStyles.ring, {
-              width: size * .88 * ratio, height: size * .82 * ratio,
-              borderWidth: size * .032, borderColor: index % 2 ? '#D8F88B' : '#78BB25',
-              borderLeftColor: 'transparent', borderBottomColor: index % 2 ? '#A5DD35' : 'transparent',
-              borderTopLeftRadius: size * .24, borderTopRightRadius: size * .4,
-              borderBottomLeftRadius: size * .38, borderBottomRightRadius: size * .25,
-              transform: [{ rotate: `${index * 67}deg` }, { translateX: size * .016 * index }],
-            }]} />)}
-            <View style={portalStyles.core} />
-          </Animated.View>
-          {Array.from({ length: 9 }, (_, index) => {
-            const angle = index * Math.PI * 2 / 9;
-            return <Animated.View key={index} style={[portalStyles.speck, { width: 5 + index % 3 * 3, height: 5 + index % 3 * 3,
-              left: size / 2 + Math.cos(angle) * size * .59, top: size / 2 + Math.sin(angle) * size * .59,
-              transform: [{ scale: pulse }], opacity: .45 + index % 3 * .2,
-            }]} />;
-          })}
-        </Animated.View>
-      </View>
-      <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={portalStyles.title}>Próxima parada: {destination}</Text>
-      <Text style={portalStyles.caption}>Atravessando o tempo…</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Pular animação de viagem" onPress={onFinish} style={portalStyles.skip}><Text style={portalStyles.skipText}>Pular viagem →</Text></Pressable>
-    </View>
-  </Modal>;
-}
-const portalStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: '#08150E', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'hidden' },
-  eyebrow: { color: '#BCD2A3', fontSize: 10, letterSpacing: 2, textAlign: 'center' },
-  vortex: { alignItems: 'center', justifyContent: 'center' },
-  halo: { position: 'absolute', borderRadius: 999, backgroundColor: '#65C52B', opacity: .12 },
-  surface: { position: 'absolute', borderRadius: 999, backgroundColor: '#9CDB35', borderWidth: 7, borderColor: '#D5FA74' },
-  lobe: { position: 'absolute', borderRadius: 999 },
-  ring: { position: 'absolute' },
-  core: { width: 25, height: 20, borderRadius: 14, backgroundColor: '#E5FFA6', transform: [{ rotate: '-25deg' }] },
-  speck: { position: 'absolute', borderRadius: 99, backgroundColor: '#C8FA69' },
-  title: { color: '#FFF6E4', fontSize: 25, lineHeight: 33, fontWeight: '800', textAlign: 'center', maxWidth: 480 },
-  caption: { color: '#BCD2A3', fontSize: 14, marginTop: 12 },
-  skip: { marginTop: 26, padding: 16, minHeight: 48, borderWidth: 1, borderColor: '#739F45', borderRadius: 30 },
-  skipText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-});
-
-export default function App() {
-  const [game, dispatch] = useReducer(gameReducer, null);
-  const [screen, setScreen] = useState('home');
-  const [mode, setMode] = useState('book');
-  const [themeCode, setThemeCode] = useState(null);
-  const [help, setHelp] = useState(false);
-  const [zoom, setZoom] = useState(false);
-  const [zoomScale, setZoomScale] = useState(1);
-  const [announcement, setAnnouncement] = useState('');
-  const [trip, setTrip] = useState(null);
-  const tripAction = useRef(null);
-  const scroll = useRef(null);
-  const secret = useRef(emptySecret());
-  const { width } = useWindowDimensions();
-  const theme = THEMES[themeCode] || DEFAULT_THEME;
-  const question = game?.program.questions[game.index];
-  const pending = question?.answer == null;
-  const maxScore = game ? game.program.questions.filter(q => q.answer != null).length * 3 : 90;
-  const programPending = game ? game.program.questions.filter(q => q.answer == null).length : 0;
-  const modeName = (THEMES[themeCode || game?.program.code] || DEFAULT_THEME).mode;
-  const ink = { color: theme.ink };
-  const muted = { color: theme.muted };
-  const top = () => scroll.current?.scrollTo({ y: 0, animated: false });
-  const finishTrip = React.useCallback(() => {
-    const action = tripAction.current;
-    tripAction.current = null;
-    setTrip(null);
-    action?.();
-  }, []);
-  const travel = (destination, action) => {
-    if (tripAction.current) return;
-    setHelp(false);
-    setZoom(false);
-    tripAction.current = action;
-    setTrip(destination);
-  };
-  const activateTheme = code => travel((THEMES[code] || DEFAULT_THEME).name, () => {
-    setThemeCode(code);
-    setAnnouncement(code ? `Época desbloqueada: ${THEMES[code].name}` : 'Visual original restaurado');
-  });
-  const start = program => travel(THEMES[program.code].name, () => {
-    dispatch({ type: 'START', program }); setScreen('play'); top();
-  });
-  const next = () => { dispatch({ type: 'NEXT' }); top(); };
-  const toggleMode = () => { setMode(m => m === 'book' ? 'quiz' : 'book'); setAnnouncement('Modo alterado. Seu progresso foi mantido.'); };
-  const openPage = () => { setZoomScale(1); setZoom(true); };
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const handle = event => {
-      const result = readSecret(secret.current, { key: event.key, repeat: event.repeat, ctrlKey: event.ctrlKey, altKey: event.altKey, metaKey: event.metaKey, editable: !!event.target?.closest?.('input, textarea, [contenteditable="true"]') }, Date.now());
-      secret.current = result.state;
-      if (result.matched) activateTheme(result.themeCode);
-    };
-    globalThis.addEventListener('keydown', handle);
-    return () => globalThis.removeEventListener('keydown', handle);
-  }, []);
-  useEffect(() => { if (game?.finished) setScreen('result'); }, [game?.finished]);
-
-  const page = <Pressable accessibilityRole="button" accessibilityLabel="Ampliar página do livro" onPress={openPage} style={[s.page, { borderColor: theme.line }]}><Image source={PAGES[question?.page]} accessibilityLabel={`Página ${question?.printedPage} do livro, questão ${question?.id}`} resizeMode="contain" style={{ width: '100%', aspectRatio: 1 / 1.3 }} /><Text style={[s.small, { color: theme.accent, textAlign: 'center', padding: 10 }]}>TOQUE PARA AMPLIAR ↗</Text></Pressable>;
-
-  return <View style={[s.root, { backgroundColor: theme.background }]}>
-    {trip && <TimePortal destination={trip} onFinish={finishTrip} />}
-    <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
-    <ScrollView ref={scroll} contentContainerStyle={[s.container, width > 800 && { paddingHorizontal: 36 }]}>
-      <View style={[s.header, { borderColor: theme.line }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Restaurar visual original" onPress={() => activateTheme(null)} onLongPress={() => activateTheme(null)}><Text style={[s.brand, ink]}>PENSE BEM<Text style={{ color: theme.accent }}>.</Text></Text><Text style={[s.small, muted]}>UM LIVRO. CINCO DESTINOS.</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Abrir ajuda e escolher época" onPress={() => setHelp(true)} style={[s.help, { borderColor: theme.line }]}><Text style={[s.small, ink]}>ÉPOCAS & AJUDA ↗</Text></Pressable>
-      </View>
-      <Text accessibilityLiveRegion="polite" style={[s.announcement, muted]}>{announcement || 'Sua próxima descoberta começa aqui.'}</Text>
-      {screen === 'home' ? <>
-        <View style={[s.hero, { backgroundColor: theme.soft }]}>
-          <Image source={theme.image} resizeMode="contain" accessibilityLabel={`Ilustração de aventura: ${theme.name}`} style={s.heroImage} />
-          <View style={s.heroCopy}><Text style={[s.eyebrow, { color: theme.accent }]}>EXPEDIÇÃO  •  {themeCode ? theme.name.toUpperCase() : 'DISNEY: VIAGEM NO TEMPO'}</Text><Text accessibilityRole="header" style={[s.title, ink]}>O passado está{ '\n' }cheio de perguntas.</Text><Text style={[s.lead, muted]}>Abra o livro ou entre no quiz. Viaje por cinco mundos, uma descoberta de cada vez.</Text></View>
-        </View>
-        <View style={s.modeBar}><View style={{ flex: 1, minWidth: 180 }}><Text style={[s.label, ink]}>Sua forma de explorar</Text><Text style={[s.small, muted]}>{mode === 'book' ? `Modo ${modeName} · livro` : 'Modo quiz · perguntas na tela'}</Text></View><Button theme={theme} outline onPress={toggleMode} label="Trocar modo de jogo">{mode === 'book' ? 'Modo quiz →' : `← Modo ${modeName}`}</Button></View>
-        {game && !game.finished && <Button theme={theme} onPress={() => { setScreen('play'); top(); }}>Continuar programa {game.program.code} · questão {game.index + 1}</Button>}
-        <View style={s.section}><Text accessibilityRole="header" style={[s.subtitle, ink]}>Escolha seu destino</Text><Text style={[s.small, muted]}>5 PROGRAMAS · 150 QUESTÕES</Text></View>
-        <View style={s.grid}>{PROGRAMS.map((program, index) => <Pressable key={program.code} accessibilityRole="button" accessibilityLabel={`Abrir programa ${program.code}: ${program.title}`} onPress={() => start(program)} onLongPress={() => activateTheme(program.code)} style={({ pressed }) => [s.program, { width: width >= 700 ? '48.5%' : '100%', borderColor: theme.line, opacity: pressed ? .75 : 1 }]}>
-          <Image source={THEMES[program.code].image} resizeMode="contain" style={s.programImage} accessibilityLabel={THEMES[program.code].name} />
-          <View style={s.programBody}><Text style={[s.eyebrow, { color: theme.accent }]}>DESTINO 0{index + 1}  /  {program.code}</Text><Text style={[s.programTitle, ink]}>{program.title}</Text><View style={s.row}><Text style={[s.small, muted]}>30 questões · começar viagem</Text><Text style={{ fontSize: 24, color: theme.accent }}>↗</Text></View></View>
-        </Pressable>)}</View>
-        <View style={[s.notice, { backgroundColor: theme.soft }]}><Text style={[s.label, ink]}>Edição em revisão</Text><Text style={[s.body, muted]}>As perguntas foram adaptadas das páginas do livro. {150 - totalPending} respostas foram interpretadas; {totalPending} aguardam confirmação. Este ainda não é o gabarito oficial.</Text></View>
-        <Text style={[s.footer, muted]}>Material acadêmico baseado em Pense Bem — Disney: Viagem no Tempo. O livro contém formulações e informações de sua época. Imagens de ambientação fornecidas pelo usuário; não são fontes históricas. Sem vínculo oficial com Disney ou Tectoy.</Text>
-      </> : game && <>
-        <View style={s.row}><Button theme={theme} outline onPress={() => { setScreen('home'); top(); }}>‹ Destinos</Button><Text style={[s.small, muted]}>PROGRAMA {game.program.code}</Text></View>
-        <View style={[s.eraStrip, { backgroundColor: theme.soft }]}><Image source={themeCode ? theme.image : THEMES[game.program.code].image} resizeMode="contain" style={s.stripImage} /><View style={s.stripCopy}><Text style={[s.eyebrow, { color: theme.accent }]}>{themeCode ? theme.name.toUpperCase() : 'SUA EXPEDIÇÃO'}</Text><Text style={[s.subtitle, ink]}>{game.program.title}</Text></View></View>
-        {screen === 'play' ? <>
-          <View style={s.modeBar}><Text style={[s.label, ink]}>{mode === 'book' ? `Modo ${modeName} · livro` : 'Modo quiz'}</Text><Button theme={theme} outline onPress={toggleMode} label="Trocar modo de jogo">{mode === 'book' ? 'Modo quiz →' : `← Modo ${modeName}`}</Button></View>
-          <View style={s.row}><Text style={[s.small, muted]}>QUESTÃO {game.index + 1} DE {game.program.questions.length}</Text><Text testID="score" style={[s.label, ink]}>{game.score} / {maxScore} pontos</Text></View>
-          <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: game.program.questions.length, now: game.index + 1 }} style={[s.track, { backgroundColor: theme.line }]}><View style={{ height: 5, backgroundColor: theme.accent, width: `${(game.index + 1) / game.program.questions.length * 100}%` }} /></View>
-          <View style={[s.quizCard, { borderColor: theme.line }]}>
-            <Text style={[s.eyebrow, { color: theme.accent }]}>{question.topic.toUpperCase()} · Nº {question.id}</Text>
-            {mode === 'quiz' ? <><Text accessibilityRole="header" style={[s.question, ink]}>{question.prompt}</Text>{question.context && <View style={[s.context, { backgroundColor: theme.soft }]}><Text style={[s.body, ink]}>{question.context}</Text></View>}{question.visual && page}<Pressable accessibilityRole="button" accessibilityLabel="Consultar página original" onPress={openPage}><Text style={[s.sourceLink, { color: theme.accent }]}>Consultar página {question.printedPage} do livro ↗</Text></Pressable></> : <><Text accessibilityRole="header" style={[s.question, ink]}>Encontre a questão {question.id}</Text>{page}</>}
-            {pending && <View style={[s.notice, { backgroundColor: theme.soft }]}><Text style={[s.label, ink]}>Resposta em revisão</Text><Text style={[s.body, muted]}>Esta questão não conta pontos. Você pode consultar o livro e seguir para a próxima.</Text></View>}
-            <View style={s.answers}>{OPTIONS.map((option, i) => {
-              const used = game.attempts.includes(option.key);
-              const right = game.resolved && question.answer === option.key;
-              const wrong = used && !right;
-              return <Pressable key={option.key} accessibilityRole="button" accessibilityLabel={`${option.key}: ${mode === 'quiz' ? question.options[i] : option.name}`} accessibilityState={{ disabled: pending || game.resolved || used }} disabled={pending || game.resolved || used} onPress={() => dispatch({ type: 'ANSWER', choice: option.key })} style={({ pressed }) => [s.answer, { borderColor: right ? '#26734D' : wrong ? '#B6382D' : theme.line, backgroundColor: right ? '#E7F3E9' : wrong ? '#FCEEEA' : '#FFF', opacity: pending ? .6 : pressed ? .7 : 1 }]}>
-                <View style={[s.badge, { backgroundColor: option.color }]}><Text style={s.badgeText}>{option.key}</Text></View><Text style={[s.optionText, ink]}>{mode === 'quiz' ? question.options[i] : option.name}</Text><Text style={{ color: right ? '#26734D' : '#B6382D', fontSize: 20 }}>{right ? '✓' : wrong ? '×' : ''}</Text>
-              </Pressable>;
-            })}</View>
-            {!pending && <Text style={[s.small, muted]}>{game.resolved ? 'Questão concluída' : `${3 - game.attempts.length} tentativas restantes · até ${3 - game.attempts.length} pontos`}</Text>}
-            {!!game.message && <View style={[s.feedback, { backgroundColor: theme.soft }]}><Text accessibilityLiveRegion="polite" style={[s.body, ink]}>{game.message}{game.resolved ? ` Resposta interpretada: ${question.answer} — ${question.options[OPTIONS.findIndex(o => o.key === question.answer)]}.` : ''}</Text></View>}
-            <View style={s.navigation}>{pending && game.index > 0 && game.program.questions[game.index - 1].answer == null && <Button theme={theme} outline onPress={() => { dispatch({ type: 'PREVIOUS' }); top(); }}>← Anterior</Button>}{(pending || game.resolved) && <Button theme={theme} onPress={next}>{game.index === game.program.questions.length - 1 ? 'Ver resultado →' : pending ? 'Continuar sem pontuar →' : 'Próxima questão →'}</Button>}</View>
-          </View>
-          <Text style={[s.footer, muted]}>Trocar o modo ou a época mantém seus pontos e tentativas. Respostas interpretadas, sujeitas à conferência com o gabarito do livro.</Text>
-        </> : <View style={[s.quizCard, { borderColor: theme.line }]}>
-          <Text style={[s.eyebrow, { color: theme.accent }]}>EXPEDIÇÃO CONCLUÍDA</Text><Text accessibilityRole="header" style={[s.title, ink]}>Mais uma época{ '\n' }descoberta.</Text>
-          <Text style={[s.score, ink]}>{game.score}<Text style={[s.lead, muted]}> / {maxScore} pontos</Text></Text><Text style={[s.lead, muted]}>{game.history.filter(h => h.correct).length} acertos em {game.history.length} questões corrigidas.</Text>
-          {programPending > 0 && <Text style={[s.body, muted]}>{programPending} questões sem correção foram excluídas do total possível. O programa completo vale 90 pontos após a revisão.</Text>}
-          <Text style={[s.small, muted]}>RESULTADO PROVISÓRIO · GABARITO INTERPRETADO</Text>
-          <View style={s.navigation}><Button theme={theme} onPress={() => start(game.program)}>Recomeçar programa</Button><Button theme={theme} outline onPress={() => { setScreen('home'); top(); }}>Escolher outro destino</Button></View>
-          <Text style={[s.subtitle, ink, { marginTop: 24 }]}>Seu diário de respostas</Text>{game.program.questions.map(q => { const entry = game.history.find(h => h.id === q.id); return <View key={q.id} style={[s.review, { borderColor: theme.line }]}><Text style={[s.label, ink]}>Questão {q.id} · {entry ? `+${entry.points} pontos` : 'Em revisão'}</Text><Text style={[s.body, muted]}>{q.prompt}</Text>{entry && <Text style={[s.small, muted]}>Tentativas: {entry.attempts.join(', ')} · Resposta: {entry.answer} — {q.options[OPTIONS.findIndex(o => o.key === entry.answer)]}</Text>}</View>; })}
-        </View>}
-      </>}
-    </ScrollView>
-    <Modal visible={help} animationType="fade" transparent onRequestClose={() => setHelp(false)}><View style={s.overlay}><ScrollView contentContainerStyle={s.modalScroll}><View style={[s.dialog, { backgroundColor: theme.background }]}><Text accessibilityRole="header" style={[s.subtitle, ink]}>Escolha sua época</Text><Text style={[s.body, muted]}>No computador, pressione Shift e digite um código. No celular, escolha abaixo ou segure um destino. Os temas mudam a ambientação, sem alterar a partida.</Text>{Object.entries(SECRET_CODES).map(([code, value]) => <Button key={code} theme={theme} outline onPress={() => { activateTheme(value); setHelp(false); }}>{value ? THEMES[value].name : 'Visual original'} · {code}</Button>)}<Text style={[s.body, muted, { marginTop: 18 }]}>No quiz, leia a pergunta e toque na alternativa. No modo livro, encontre o número na página original. Acertos valem 3, 2 ou 1 ponto conforme a tentativa. Três erros encerram a questão.</Text><Button theme={theme} onPress={() => setHelp(false)}>Fechar ajuda</Button></View></ScrollView></View></Modal>
-    <Modal visible={zoom} animationType="slide" onRequestClose={() => setZoom(false)}><View style={[s.root, { backgroundColor: theme.background, paddingTop: 36 }]}><View style={[s.row, { padding: 16, flexWrap: 'wrap' }]}><Text style={[s.label, ink]}>Página {question?.printedPage} · questão {question?.id}</Text><Button theme={theme} onPress={() => setZoom(false)}>Fechar página</Button></View><View style={[s.row, { paddingHorizontal: 16 }]}><Button theme={theme} outline disabled={zoomScale === 1} onPress={() => setZoomScale(v => Math.max(1, v - .5))} label="Diminuir ampliação">−</Button><Text style={ink}>{zoomScale * 100}%</Text><Button theme={theme} outline disabled={zoomScale === 3} onPress={() => setZoomScale(v => Math.min(3, v + .5))} label="Aumentar ampliação">+</Button></View><ScrollView><ScrollView horizontal>{question && <Image source={PAGES[question.page]} resizeMode="contain" style={{ width: width * zoomScale, height: width * zoomScale * 1.3 }} />}</ScrollView></ScrollView></View></Modal>
+function StatusNote({children,theme,warning=false}){
+  return <View style={[styles.note,{backgroundColor:warning?'#FFF1D7':theme.soft,borderColor:warning?'#EBC77D':theme.border}]}>
+    <Text style={[styles.noteText,{color:warning?'#6E4A11':theme.ink}]}>{children}</Text>
   </View>;
 }
-const s = StyleSheet.create({
-  root: { flex: 1 }, container: { width: '100%', maxWidth: 1060, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 36, paddingBottom: 50 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottomWidth: 1, paddingBottom: 16 },
-  brand: { fontSize: 25, fontWeight: '900', letterSpacing: -1 }, small: { fontSize: 11, lineHeight: 18, letterSpacing: .4 }, help: { borderWidth: 1, borderRadius: 30, padding: 12 }, announcement: { fontSize: 12, lineHeight: 18, marginVertical: 14 },
-  hero: { borderRadius: 20, overflow: 'hidden' }, heroImage: { width: '100%', height: 300 }, heroCopy: { padding: 25 }, eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 10 }, title: { fontSize: 36, lineHeight: 42, fontWeight: '800', letterSpacing: -1, marginBottom: 14 }, lead: { fontSize: 16, lineHeight: 25 },
-  modeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginVertical: 22 }, label: { fontSize: 14, fontWeight: '700', lineHeight: 22 }, button: { borderWidth: 1, borderRadius: 12, minHeight: 46, paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', marginVertical: 4 }, buttonText: { fontSize: 13, fontWeight: '700', textAlign: 'center' }, section: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'baseline', marginTop: 14, marginBottom: 18 }, subtitle: { fontSize: 23, lineHeight: 29, fontWeight: '700' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 18 }, program: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', backgroundColor: '#FFFEFA' }, programImage: { width: '100%', height: 210 }, programBody: { padding: 20 }, programTitle: { fontSize: 22, fontWeight: '700', marginBottom: 12 }, row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, notice: { padding: 18, borderRadius: 12, marginVertical: 18 }, body: { fontSize: 14, lineHeight: 23 }, footer: { fontSize: 11, lineHeight: 19, marginTop: 20 },
-  eraStrip: { borderRadius: 15, overflow: 'hidden', marginTop: 18 }, stripImage: { width: '100%', height: 240 }, stripCopy: { padding: 18 }, track: { height: 5, borderRadius: 4, overflow: 'hidden', marginTop: 12, marginBottom: 22 }, quizCard: { backgroundColor: '#FFFEFA', borderRadius: 20, borderWidth: 1, padding: 22 }, question: { fontSize: 25, lineHeight: 34, fontWeight: '700', marginBottom: 18 }, context: { padding: 16, borderRadius: 10, marginBottom: 16 }, sourceLink: { fontSize: 12, fontWeight: '600', paddingVertical: 12 }, page: { borderWidth: 1, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFF' }, answers: { gap: 10, marginVertical: 18 }, answer: { minHeight: 62, borderRadius: 12, borderWidth: 1.5, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }, badge: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, badgeText: { color: '#FFF', fontSize: 14, fontWeight: '800' }, optionText: { flex: 1, fontSize: 15, lineHeight: 23, fontWeight: '500' }, feedback: { padding: 16, borderRadius: 10, marginTop: 16 }, navigation: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 12, marginTop: 18 }, score: { fontSize: 64, fontWeight: '800', marginVertical: 14 }, review: { paddingVertical: 18, borderBottomWidth: 1, gap: 6 },
-  overlay: { flex: 1, backgroundColor: '#112820BB' }, modalScroll: { flexGrow: 1, justifyContent: 'center', padding: 20 }, dialog: { width: '100%', maxWidth: 560, alignSelf: 'center', borderRadius: 22, padding: 24, gap: 8 },
+function Portal({destination,onDone}){
+  const motion=useRef(new Animated.Value(0)).current;
+  const onDoneRef=useRef(onDone);
+  const completed=useRef(false);
+  onDoneRef.current=onDone;
+  const {width,height}=useWindowDimensions();
+  const finish=useCallback(()=>{
+    if(completed.current)return;
+    completed.current=true;
+    onDoneRef.current?.();
+  },[]);
+  useEffect(()=>{
+    let cancelled=false;
+    let animation;
+    const start=(reduce)=>{
+      if(cancelled||completed.current)return;
+      if(reduce){finish();return;}
+      animation=Animated.timing(motion,{toValue:1,duration:1800,easing:Easing.inOut(Easing.cubic),useNativeDriver:Platform.OS!=='web'});
+      animation.start(({finished})=>{if(finished&&!cancelled)finish();});
+    };
+    const sub=AccessibilityInfo.addEventListener('reduceMotionChanged',(enabled)=>{if(enabled)finish();});
+    AccessibilityInfo.isReduceMotionEnabled().then(start,()=>start(true));
+    return ()=>{cancelled=true;animation?.stop();sub?.remove?.();};
+  },[finish,motion]);
+  const size=Math.min(width*.68,height*.37,280);
+  const spin=motion.interpolate({inputRange:[0,1],outputRange:['0deg','420deg']});
+  const reverse=motion.interpolate({inputRange:[0,1],outputRange:['0deg','-590deg']});
+  const pulse=motion.interpolate({inputRange:[0,.4,.8,1],outputRange:[.75,1,.82,.12]});
+  return <View style={styles.portalOverlay}>
+    <Text style={styles.portalEyebrow}>PORTAL TEMPORAL ATIVADO</Text>
+    <View style={{width:size,height:size,alignItems:'center',justifyContent:'center',marginVertical:35}}>
+      <Animated.View style={[styles.portalOuter,{width:size,height:size,borderRadius:size/2,transform:[{rotate:spin},{scale:pulse}]}]}/>
+      <Animated.View style={[styles.portalMiddle,{width:size*.8,height:size*.8,borderRadius:size*.4,transform:[{rotate:reverse}]}]}/>
+      <Animated.View style={[styles.portalInner,{width:size*.57,height:size*.57,borderRadius:size*.285,transform:[{rotate:spin}]}]}/>
+      <View style={[styles.portalCore,{width:size*.36,height:size*.36,borderRadius:size*.18}]}/>
+    </View>
+    <Text style={styles.portalTitle}>Próxima parada:{'\n'}{destination}</Text>
+    <Pressable accessibilityRole="button" style={styles.portalSkip} onPress={finish}><Text style={styles.portalSkipText}>Pular viagem →</Text></Pressable>
+  </View>;
+}
+
+export default function App(){
+  const [game,dispatch]=useReducer(gameReducer,null);
+  const [screen,setScreen]=useState('home');
+  const [mode,setMode]=useState('book');
+  const [themeCode,setThemeCode]=useState(null);
+  const [showHelp,setShowHelp]=useState(false);
+  const [showZoom,setShowZoom]=useState(false);
+  const [zoomScale,setZoomScale]=useState(1);
+  const [trip,setTrip]=useState(null);
+  const [announcement,setAnnouncement]=useState('');
+  const tripAction=useRef(null);
+  const scroll=useRef(null);
+  const secret=useRef(emptySecret());
+  const {width}=useWindowDimensions();
+  const theme=THEMES[themeCode]||DEFAULT_THEME;
+  const question=game?.program.questions[game.index];
+  const stats=game?scoreSummary(game):null;
+  const bookModeName=(THEMES[themeCode||game?.program?.code]||DEFAULT_THEME).mode;
+  const ink={color:theme.ink};
+  const muted={color:theme.muted};
+  const scrollTop=()=>scroll.current?.scrollTo({y:0,animated:false});
+
+  const completeTrip=useCallback(()=>{
+    const fn=tripAction.current;
+    tripAction.current=null;
+    setTrip(null);
+    fn?.();
+  },[]);
+  const travel=(title,fn)=>{
+    if(tripAction.current)return;
+    tripAction.current=fn;
+    setShowZoom(false);setShowHelp(false);setTrip(title);
+  };
+  const begin=(program)=>travel(THEMES[program.code].name,()=>{
+    dispatch({type:'START',program});setScreen('play');setThemeCode(program.code);scrollTop();
+  });
+  const setEra=(code)=>travel((THEMES[code]||DEFAULT_THEME).name,()=>{
+    setThemeCode(code);setAnnouncement(code?`Ambientação: ${THEMES[code].name}`:'Visual original restaurado');scrollTop();
+  });
+  const next=()=>{dispatch({type:'NEXT'});scrollTop();};
+  const swapMode=()=>{setMode(m=>m==='book'?'quiz':'book');setAnnouncement('Modo alterado sem perder os pontos.');};
+  const openPage=()=>{setZoomScale(1);setShowZoom(true);};
+
+  useEffect(()=>{
+    if(Platform.OS!=='web')return;
+    const listener=(event)=>{
+      const result=readSecret(secret.current,{key:event.key,repeat:event.repeat,ctrlKey:event.ctrlKey,altKey:event.altKey,metaKey:event.metaKey,editable:!!event.target?.closest?.('input,textarea,[contenteditable="true"]')},Date.now());
+      secret.current=result.state;
+      if(result.matched){
+        // Teclas de atalho não alteram o jogo; apenas trocam os cenários.
+        if(!tripAction.current){tripAction.current=()=>{setThemeCode(result.themeCode);setAnnouncement('Época secreta ativada.');};setTrip((THEMES[result.themeCode]||DEFAULT_THEME).name);}
+      }
+    };
+    globalThis.addEventListener('keydown',listener);
+    return ()=>globalThis.removeEventListener('keydown',listener);
+  },[]);
+  useEffect(()=>{if(game?.finished){setScreen('result');scrollTop();}},[game?.finished]);
+
+  const pageImage=question&&PAGES[question.page]&&<Pressable accessibilityRole="button" accessibilityLabel="Ampliar página original do livro" onPress={openPage}
+    style={[styles.pageFrame,{borderColor:theme.border}]}>
+    <Image source={PAGES[question.page]} style={styles.pageImage} resizeMode="contain" accessibilityLabel={`Página impressa ${question.printedPage}`} />
+    <Text style={[styles.pageHint,{color:theme.accent}]}>Toque para ampliar a página do livro ↗</Text>
+  </Pressable>;
+
+  return <View style={[styles.root,{backgroundColor:theme.background}]}>
+    <StatusBar barStyle="dark-content" backgroundColor={theme.background}/>
+    <ScrollView ref={scroll} contentContainerStyle={[styles.container,{maxWidth:970,paddingHorizontal:width>720?35:17}]}>
+      <View style={[styles.header,{borderBottomColor:theme.border}]}>
+        <Pressable onPress={()=>setEra(null)} accessibilityLabel="Retornar à ambientação padrão">
+          <Text style={[styles.brand,ink]}>PENSE BEM<Text style={{color:theme.accent}}> · </Text>DISNEY</Text>
+          <Text style={[styles.tiny,muted]}>VIAGEM NO TEMPO · AV2 MOBILE</Text>
+        </Pressable>
+        <Action title="Épocas e ajuda" onPress={()=>setShowHelp(true)} theme={theme} secondary/>
+      </View>
+      {announcement?<Text accessibilityLiveRegion="polite" style={[styles.small,muted,{marginTop:10}]}>{announcement}</Text>:null}
+
+      {screen==='home' ? <>
+        <View style={[styles.hero,{backgroundColor:theme.soft}]}>
+          <Image source={theme.image} resizeMode="contain" style={styles.heroArt} accessibilityLabel="Arte do Mickey em viagem no tempo"/>
+          <View style={styles.heroCopy}>
+            <Text style={[styles.eyebrow,{color:theme.accent}]}>PENSE BEM · UMA AVENTURA INTERATIVA</Text>
+            <Text style={[styles.title,ink]}>Cinco épocas.{ '\n' }150 desafios.</Text>
+            <Text style={[styles.body,muted]}>Use as páginas do livro como no brinquedo original, ou escolha o quiz moderno. Em cada questão, você tem três tentativas.</Text>
+          </View>
+        </View>
+        <StatusNote theme={theme} warning>{`Revisão obrigatória: ${PROVISIONAL_COUNT} respostas são hipóteses, não gabarito oficial. Todas as 150 questões são jogáveis; a pontuação continua provisória até a conferência.`}</StatusNote>
+        <View style={styles.sectionTop}>
+          <Text style={[styles.sectionTitle,ink]}>Escolha seu modo</Text>
+          <Action title={mode==='book'?'Ir para o modo quiz':'Ir para o modo livro'} secondary theme={theme} onPress={swapMode}/>
+        </View>
+        <Text style={[styles.small,muted]}>{mode==='book'?`Modo ${bookModeName} · páginas originais`:'Modo quiz · enunciados e alternativas na tela'}</Text>
+        {game&&!game.finished&&<Action title={`Continuar programa ${game.program.code} · pergunta ${game.index+1}`} onPress={()=>{setScreen('play');scrollTop();}} theme={theme}/>}
+        <View style={styles.sectionTop}><Text style={[styles.sectionTitle,ink]}>Escolha seu destino</Text><Text style={[styles.small,muted]}>5 programas · 30 questões cada</Text></View>
+        <View style={styles.cards}>{PROGRAMS.map((p,i)=><Pressable key={p.code} accessibilityRole="button" accessibilityLabel={`Iniciar programa ${p.code}`} onPress={()=>begin(p)}
+          style={({pressed})=>[styles.card,{borderColor:theme.border,width:width>=730?'48%':'100%',opacity:pressed?.72:1}]}>
+          <Image source={THEMES[p.code].image} resizeMode="contain" style={styles.cardArt}/>
+          <View style={styles.cardCopy}>
+            <Text style={[styles.eyebrow,{color:theme.accent}]}>DESTINO 0{i+1} · CÓDIGO {p.code}</Text>
+            <Text style={[styles.cardTitle,ink]}>{p.title}</Text>
+            <Text style={[styles.small,muted]}>30 perguntas · até 90 pontos →</Text>
+          </View>
+        </Pressable>)}</View>
+        <Text style={[styles.footer,muted]}>Projeto acadêmico baseado em Pense Bem — Disney: Viagem no Tempo (Tectoy / Nova Cultural, 1991). Sem vínculo oficial com os titulares das marcas. Questões adaptadas para estudo.</Text>
+      </> : game ? <>
+        <View style={[styles.sectionTop,{marginTop:20}]}>
+          <Action title="‹ Destinos" theme={theme} secondary onPress={()=>{setScreen('home');scrollTop();}}/>
+          <Text style={[styles.eyebrow,{color:theme.accent}]}>PROGRAMA {game.program.code}</Text>
+        </View>
+        <View style={[styles.miniBanner,{backgroundColor:theme.soft}]}>
+          <Image source={THEMES[game.program.code].image} resizeMode="contain" style={styles.bannerArt}/>
+          <View style={{flex:1,padding:12}}><Text style={[styles.sectionTitle,ink]}>{game.program.title}</Text><Text style={[styles.small,muted]}>{(THEMES[game.program.code]).name}</Text></View>
+        </View>
+        {screen==='play' ? <>
+          <View style={styles.sectionTop}><Text style={[styles.small,ink]}>QUESTÃO {game.index+1} / 30</Text><Text testID="score" style={[styles.sectionTitle,ink]}>{game.score} / 90</Text></View>
+          <View style={[styles.progress,{backgroundColor:theme.border}]}><View style={{height:'100%',backgroundColor:theme.accent,width:`${(game.index+1)/30*100}%`}}/></View>
+          <View style={[styles.sectionTop,{marginBottom:6}]}><Text style={[styles.eyebrow,{color:theme.accent}]}>{mode==='book'?`MODO ${bookModeName.toUpperCase()}`:'MODO QUIZ'}</Text><Action title={mode==='book'?'Abrir quiz':'Abrir livro'} secondary onPress={swapMode} theme={theme}/></View>
+          <View style={[styles.questionCard,{borderColor:theme.border}]}>
+            <Text style={[styles.eyebrow,{color:theme.accent}]}>{question.topic.toUpperCase()} · Nº {question.id}</Text>
+            {mode==='quiz'?<>
+              <Text style={[styles.question,ink]}>{question.prompt}</Text>
+              {question.context?<StatusNote theme={theme}>{question.context}</StatusNote>:null}
+              {question.visual? pageImage : <Pressable onPress={openPage}><Text style={[styles.link,{color:theme.accent}]}>Ver página original do livro ↗</Text></Pressable>}
+            </>:<>
+              <Text style={[styles.question,ink]}>Procure a questão {question.id} na página do livro.</Text>
+              {pageImage}
+            </>}
+            {question.answerStatus==='provisional'&&<StatusNote warning theme={theme}>Atenção: esta resposta é uma hipótese ainda não conferida com o gabarito oficial. A pontuação é experimental.</StatusNote>}
+            {question.imageMissing&&<StatusNote warning theme={theme}>A figura original desta questão não aparece completa na digitalização. Compare com o livro físico antes de usar o gabarito para avaliação.</StatusNote>}
+            <Text style={[styles.small,muted,{marginTop:16}]}>TENTATIVA {game.resolved?Math.max(1,game.attempts.length):game.attempts.length+1} DE 3</Text>
+            <View style={styles.answerList}>{BUTTONS.map((opt,i)=>{
+              const attempted=game.attempts.includes(opt.key);
+              const correct=game.resolved&&question.answer===opt.key;
+              const wrong=attempted&&!correct;
+              const disabled=game.resolved||attempted;
+              return <Pressable key={opt.key} testID={`answer-${opt.key}`} accessibilityRole="button" accessibilityLabel={`Alternativa ${opt.key}: ${mode==='book'?opt.name:question.options[i]}`} accessibilityState={{disabled}}
+                onPress={()=>dispatch({type:'ANSWER',choice:opt.key})} disabled={disabled}
+                style={({pressed})=>[styles.answer,{borderColor:correct?'#248653':wrong?'#C95142':theme.border,backgroundColor:correct?'#E8F8EE':wrong?'#FFEDEA':'#FFFFFF',opacity:pressed?.74:1}]}>
+                  <View style={[styles.colorBadge,{backgroundColor:opt.color}]}><Text style={[styles.badgeText,{color:opt.key==='B'?'#151515':'#FFFFFF'}]}>{opt.key}</Text></View>
+                  <Text style={[styles.answerLabel,ink]}>{mode==='book'?opt.name:question.options[i]}</Text>
+                  <Text style={[styles.resultMark,{color:correct?'#178641':'#BE473A'}]}>{correct?'✓':wrong?'×':''}</Text>
+                </Pressable>;
+            })}</View>
+            {game.feedback?<StatusNote theme={theme}>{game.feedback}{game.resolved?` Resposta cadastrada: ${question.answer}.`:''}</StatusNote>:<Text style={[styles.small,muted]}>Cada erro consome uma tentativa. Acertos valem 3, 2 ou 1 ponto.</Text>}
+            {game.resolved&&<Action testID="next" title={game.index===29?'Concluir e ver resultado →':'Próxima questão →'} onPress={next} theme={theme}/>}
+          </View>
+        </> : <View style={[styles.questionCard,{borderColor:theme.border}]}>
+          <Text style={[styles.eyebrow,{color:theme.accent}]}>PROGRAMA CONCLUÍDO</Text>
+          <Text style={[styles.title,ink]}>Viagem finalizada!</Text>
+          <Text style={[styles.bigScore,ink]}>{stats.score}<Text style={[styles.body,muted]}> / 90 pontos</Text></Text>
+          <Text style={[styles.body,ink]}>{stats.correct} acertos em 30 questões · {stats.provisionalPoints} pontos dependem de respostas provisórias.</Text>
+          <StatusNote warning theme={theme}>Este resultado ainda não é homologado: as 150 respostas do projeto são adaptações editoriais, e {stats.reviewed} questões deste programa usam hipóteses adicionais.</StatusNote>
+          <View style={styles.toolbar}><Action title="Reiniciar programa" theme={theme} onPress={()=>begin(game.program)}/><Action title="Outros destinos" theme={theme} secondary onPress={()=>{setScreen('home');scrollTop();}}/></View>
+          <Text style={[styles.sectionTitle,ink,{marginTop:26}]}>Seu histórico</Text>
+          {game.history.map((h,i)=><View key={h.id} style={[styles.historyItem,{borderColor:theme.border}]}>
+            <Text style={[styles.small,ink]}>Questão {h.id} · {h.correct?'Acertou':'Não acertou'} · +{h.points} ponto(s)</Text>
+            <Text style={[styles.small,muted]}>Respostas: {h.attempts.join(' → ')} · Gabarito cadastrado: {h.answer} {h.answerStatus==='provisional'?'(hipótese)':''}</Text>
+          </View>)}
+        </View>}
+      </> : null}
+    </ScrollView>
+    <Modal visible={showHelp} animationType="fade" transparent onRequestClose={()=>setShowHelp(false)}>
+      <View style={styles.modalBackdrop}><ScrollView contentContainerStyle={styles.modalScroll}>
+        <View style={[styles.dialog,{backgroundColor:theme.surface}]}>
+          <Text style={[styles.sectionTitle,ink]}>Manual do viajante</Text>
+          <Text style={[styles.body,muted]}>Cada programa tem 30 perguntas. Você tem três tentativas por pergunta: acertar na primeira vale 3 pontos, na segunda vale 2, na terceira vale 1; errar as três vale 0.</Text>
+          <Text style={[styles.body,muted]}>Trocar de época e de modo mantém a questão e os pontos. Ao escolher outro destino, começa uma nova partida.</Text>
+          <Text style={[styles.sectionTitle,ink,{marginTop:18}]}>Códigos secretos</Text>
+          <Text style={[styles.small,muted]}>Na web, pressione Shift e digite um código. No celular, use os botões abaixo:</Text>
+          {Object.entries(SECRET_CODES).map(([secretCode,programCode])=><Action key={secretCode} theme={theme} secondary title={`${secretCode} · ${(THEMES[programCode]||DEFAULT_THEME).name}`} onPress={()=>setEra(programCode)}/>)}
+          <StatusNote warning theme={theme}>Gabarito de referência, ainda não oficial. Verifique especialmente as questões 30, 32, 36, 37, 40, 49, 54, 62, 64, 73, 83, 99, 120, 121–123, 125 e 126.</StatusNote>
+          <Action title="Fechar" theme={theme} onPress={()=>setShowHelp(false)}/>
+        </View>
+      </ScrollView></View>
+    </Modal>
+    <Modal visible={showZoom} animationType="slide" onRequestClose={()=>setShowZoom(false)}>
+      <View style={[styles.zoomRoot,{backgroundColor:theme.background}]}>
+        <View style={styles.toolbar}><Text style={[styles.small,ink]}>Página {question?.printedPage} · questão {question?.id}</Text><Action title="Fechar" onPress={()=>setShowZoom(false)} theme={theme}/></View>
+        <View style={styles.toolbar}><Action title="− Zoom" onPress={()=>setZoomScale(v=>Math.max(1,v-.5))} disabled={zoomScale<=1} secondary theme={theme}/><Text style={ink}>{Math.round(zoomScale*100)}%</Text><Action title="+ Zoom" onPress={()=>setZoomScale(v=>Math.min(3,v+.5))} disabled={zoomScale>=3} secondary theme={theme}/></View>
+        <ScrollView><ScrollView horizontal>{question&&<Image source={PAGES[question.page]} resizeMode="contain" style={{width:width*zoomScale,height:width*1.32*zoomScale}}/>}</ScrollView></ScrollView>
+      </View>
+    </Modal>
+    {trip&&<Portal destination={trip} onDone={completeTrip}/>}
+  </View>;
+}
+
+const styles=StyleSheet.create({
+  root:{flex:1},container:{width:'100%',alignSelf:'center',paddingTop:20,paddingBottom:55},
+  header:{borderBottomWidth:1,flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,paddingBottom:12},
+  brand:{fontSize:21,fontWeight:'900'},tiny:{fontSize:10,letterSpacing:1.1,marginTop:2},
+  action:{borderWidth:1,borderRadius:11,minHeight:43,paddingVertical:10,paddingHorizontal:15,alignItems:'center',justifyContent:'center',marginVertical:5},
+  actionText:{fontSize:13,fontWeight:'800',textAlign:'center'},
+  hero:{borderRadius:20,overflow:'hidden',marginTop:21},heroArt:{width:'100%',height:270},heroCopy:{padding:24},
+  eyebrow:{fontSize:11,fontWeight:'900',letterSpacing:1.2,marginBottom:9},title:{fontSize:34,lineHeight:42,fontWeight:'900',marginBottom:8},
+  body:{fontSize:15,lineHeight:23},small:{fontSize:12,lineHeight:19},note:{borderWidth:1,padding:13,borderRadius:11,marginVertical:10},noteText:{fontSize:12,lineHeight:19},
+  sectionTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap',marginTop:17,marginBottom:13},
+  sectionTitle:{fontSize:20,lineHeight:26,fontWeight:'800'},cards:{flexDirection:'row',flexWrap:'wrap',gap:15,justifyContent:'space-between'},
+  card:{borderWidth:1,borderRadius:16,overflow:'hidden',backgroundColor:'#FFFFFF'},cardArt:{width:'100%',height:190},cardCopy:{padding:19},cardTitle:{fontSize:20,fontWeight:'800',marginBottom:8},
+  footer:{fontSize:10,lineHeight:17,marginTop:24},miniBanner:{flexDirection:'row',alignItems:'center',borderRadius:14,overflow:'hidden',marginTop:2},bannerArt:{width:130,height:115},
+  progress:{height:7,borderRadius:4,overflow:'hidden',marginBottom:9},questionCard:{backgroundColor:'#FFFFFF',borderWidth:1,borderRadius:18,padding:20,marginVertical:10},
+  question:{fontSize:23,lineHeight:31,fontWeight:'800',marginBottom:15},link:{fontSize:13,fontWeight:'800',marginVertical:12},
+  pageFrame:{borderWidth:1,borderRadius:10,overflow:'hidden',marginVertical:8},pageImage:{width:'100%',height:460},pageHint:{fontSize:12,fontWeight:'700',textAlign:'center',padding:9},
+  answerList:{gap:10,marginVertical:13},answer:{minHeight:60,borderWidth:1.5,borderRadius:12,flexDirection:'row',alignItems:'center',gap:12,padding:11},
+  colorBadge:{width:40,height:40,borderRadius:8,alignItems:'center',justifyContent:'center'},badgeText:{fontSize:20,fontWeight:'900'},
+  answerLabel:{fontSize:15,lineHeight:22,flex:1},resultMark:{fontSize:22,fontWeight:'900'},
+  bigScore:{fontSize:64,fontWeight:'900',marginVertical:17},toolbar:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:9,padding:9},
+  historyItem:{borderBottomWidth:1,paddingVertical:11,gap:3},modalBackdrop:{flex:1,backgroundColor:'#061D1BCC'},modalScroll:{flexGrow:1,justifyContent:'center',padding:18},
+  dialog:{width:'100%',maxWidth:580,alignSelf:'center',borderRadius:19,padding:21,gap:9},zoomRoot:{flex:1,paddingTop:Platform.OS==='ios'?44:20},
+  portalOverlay:{position:'absolute',left:0,right:0,top:0,bottom:0,zIndex:1000,backgroundColor:'#061F20FA',alignItems:'center',justifyContent:'center',padding:25},
+  portalEyebrow:{fontSize:13,letterSpacing:3,color:'#83EEC7',fontWeight:'900',textAlign:'center'},
+  portalOuter:{position:'absolute',borderWidth:13,borderColor:'#2CE89B',borderStyle:'dashed',shadowColor:'#69FFC8',shadowOpacity:.55,shadowRadius:30},
+  portalMiddle:{position:'absolute',borderWidth:18,borderColor:'#A5F5B9',borderStyle:'dotted'},
+  portalInner:{position:'absolute',borderWidth:16,borderColor:'#0B946A',borderStyle:'dashed'},portalCore:{backgroundColor:'#A2FFD7',shadowColor:'#60FFAF',shadowOpacity:1,shadowRadius:35},
+  portalTitle:{fontSize:25,lineHeight:34,color:'#FFFFFF',fontWeight:'900',textAlign:'center'},portalSkip:{marginTop:40,padding:16},portalSkipText:{color:'#A3FFE0',fontWeight:'900',fontSize:16},
 });

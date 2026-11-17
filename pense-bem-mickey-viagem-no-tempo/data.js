@@ -1,52 +1,16 @@
 import { CONTENT } from './content.js';
+
 const SECTIONS = [
-  { code: '151', title: 'O elo perdido', pages: [
-    { page: 5, from: 1, to: 6, topic: 'O elo perdido' },
-    { page: 6, from: 7, to: 12, topic: 'Cruzadas de peso' },
-    { page: 7, from: 13, to: 18, topic: 'Você sabia?' },
-    { page: 8, from: 19, to: 24, topic: 'Descobertas' },
-    { page: 9, from: 25, to: 30, topic: 'Descobertas' },
-  ] },
-  { code: '152', title: 'Viagem pela história', pages: [
-    { page: 11, from: 31, to: 37, topic: 'No Extremo Oriente' },
-    { page: 12, from: 38, to: 43, topic: 'Os maiores' },
-    { page: 13, from: 44, to: 50, topic: 'Voando alto' },
-    { page: 14, from: 51, to: 56, topic: 'Carta enigmática' },
-    { page: 15, from: 57, to: 60, topic: 'Quebra-cabeça' },
-  ] },
-  { code: '153', title: 'Inventos e civilizações', pages: [
-    { page: 17, from: 61, to: 66, topic: 'Revolução Industrial' },
-    { page: 18, from: 67, to: 73, topic: 'Inventos e inventores' },
-    { page: 19, from: 74, to: 79, topic: 'Na Roma Antiga' },
-    { page: 20, from: 80, to: 85, topic: 'Técnica e cultura' },
-    { page: 21, from: 86, to: 90, topic: 'Mais cruzadas' },
-  ] },
-  { code: '154', title: 'Povos das Américas', pages: [
-    { page: 23, from: 91, to: 97, topic: 'Erro de cálculo' },
-    { page: 24, from: 98, to: 103, topic: 'O Império Inca' },
-    { page: 25, from: 104, to: 110, topic: 'No México' },
-    { page: 26, from: 111, to: 116, topic: 'Curiosidades' },
-    { page: 27, from: 117, to: 120, topic: 'Identifique' },
-  ] },
-  { code: '155', title: 'Civilização egípcia', pages: [
-    { page: 29, from: 121, to: 126, topic: 'Civilização egípcia' },
-    { page: 30, from: 127, to: 133, topic: 'Às margens do Nilo' },
-    { page: 31, from: 134, to: 139, topic: 'Forme as frases' },
-    { page: 32, from: 140, to: 146, topic: 'Mais informações' },
-    { page: 33, from: 147, to: 150, topic: 'O que é?' },
-  ] },
+  { code: '151', title: 'O elo perdido', pages: [[5,1,6,'O elo perdido'],[6,7,12,'Cruzadas de peso'],[7,13,18,'Você sabia?'],[8,19,24,'Descobertas'],[9,25,30,'Descobertas']] },
+  { code: '152', title: 'Viagem pela história', pages: [[11,31,37,'Extremo Oriente'],[12,38,43,'Os maiores'],[13,44,50,'Voando alto'],[14,51,56,'Carta enigmática'],[15,57,60,'Quebra-cabeça']] },
+  { code: '153', title: 'Inventos e civilizações', pages: [[17,61,66,'Revolução Industrial'],[18,67,73,'Inventos e inventores'],[19,74,79,'Roma antiga'],[20,80,85,'Técnica e cultura'],[21,86,90,'Mais cruzadas']] },
+  { code: '154', title: 'Povos das Américas', pages: [[23,91,97,'Erro de cálculo'],[24,98,103,'Império Inca'],[25,104,110,'México'],[26,111,116,'Curiosidades'],[27,117,120,'Identifique']] },
+  { code: '155', title: 'Civilização egípcia', pages: [[29,121,126,'Civilização egípcia'],[30,127,133,'Às margens do Nilo'],[31,134,139,'Forme as frases'],[32,140,146,'Mais informações'],[33,147,150,'O que é?']] },
 ];
 
-export const PROGRAMS = SECTIONS.map(({ code, title, pages }) => ({
-  code,
-  title,
-  questions: pages.flatMap(({ page, from, to, topic }) =>
-    Array.from({ length: to - from + 1 }, (_, index) => ({
-      id: from + index,
-      ...CONTENT[from + index],
-      page,
-      printedPage: page - 2,
-      topic,
-    }))
-  ),
+export const PROGRAMS = SECTIONS.map(({code,title,pages}) => ({
+  code, title,
+  questions: pages.flatMap(([page,first,last,topic]) =>
+    Array.from({length:last-first+1},(_,i) => ({...CONTENT[first+i],page,printedPage:page-2,topic})))
 }));
+export const TOTAL_QUESTOES = PROGRAMS.reduce((sum,p) => sum+p.questions.length,0);
